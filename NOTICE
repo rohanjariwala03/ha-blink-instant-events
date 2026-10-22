@@ -1,0 +1,10 @@
+Third-party notes
+=================
+
+The Blink push protocol details (Firebase project identifiers, client
+association and notification receipt endpoints, event classification) were
+learned from CoreyHayward/ha-blink-live-events, MIT License, Copyright (c)
+Corey Hayward. No source code from that project is included here.
+
+Runtime dependencies: firebase-messaging (MIT, sdb9696) and blinkpy (MIT,
+Kevin Fronczak), installed by Home Assistant from PyPI.
