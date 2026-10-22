@@ -1,0 +1,66 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sign in to Blink",
+        "description": "Signs in as a separate Blink app client that receives push notifications. Your password is used once and not stored.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        },
+        "data_description": {
+          "email": "The email address of your Blink account.",
+          "password": "Your Blink password."
+        }
+      },
+      "2fa": {
+        "title": "Verification code",
+        "description": "Enter the PIN Blink just sent you by text or email.",
+        "data": {
+          "pin": "PIN"
+        },
+        "data_description": {
+          "pin": "The verification code from Blink."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "invalid_pin": "The PIN was not accepted. Check it and try again.",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "Account is already configured",
+      "cannot_connect": "Failed to connect",
+      "reauth_successful": "Re-authentication was successful",
+      "wrong_account": "Sign in with the same Blink account as before."
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "motion": "Motion detected",
+      "doorbell_press": "Doorbell pressed"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "push_connected": {
+        "name": "Push connection"
+      }
+    },
+    "event": {
+      "blink_event": {
+        "name": "Blink event",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "motion": "Motion detected",
+              "doorbell_press": "Doorbell pressed"
+            }
+          }
+        }
+      }
+    }
+  }
+}

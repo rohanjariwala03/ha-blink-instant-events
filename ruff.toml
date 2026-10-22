@@ -1,0 +1,13 @@
+line-length = 120
+
+[lint]
+select = ["B", "BLE", "E", "F", "I", "UP", "W"]
+
+[lint.isort]
+force-sort-within-sections = true
+known-first-party = ["homeassistant", "custom_components", "tests"]
+combine-as-imports = true
+split-on-trailing-comma = false
+
+[lint.per-file-ignores]
+"custom_components/blink_instant_events/config_flow.py" = ["BLE001"]
