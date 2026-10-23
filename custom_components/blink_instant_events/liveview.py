@@ -251,7 +251,9 @@ class LiveSession:
             if not self.running:
                 if self._drainer:  # let the last lines in: they say why
                     await asyncio.wait([self._drainer], timeout=1)
-                raise RuntimeError(f"ffmpeg stopped: {' | '.join(self._stderr) or 'no output'}")
+                raise RuntimeError(
+                    f"ffmpeg stopped ({self._process.returncode}): {' | '.join(self._stderr) or 'no output'}"
+                )
             if self._feed and self._feed.done():
                 raise RuntimeError(f"Could not connect to the camera's stream: {self._feed.exception()!r}")
             if await self.views.hass.async_add_executor_job(_nonempty, self.playlist):
