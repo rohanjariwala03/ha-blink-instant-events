@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0 — camera settings, offline cameras, clips in the Media panel
+
+- Camera settings as entities, read from Blink's cloud every 30 minutes and right after a change
+  (reading never wakes a camera), written through the same code as the live view's settings
+  sheet: `select.<camera>_night_vision` (auto/on/off) on every camera, and on the models that
+  have them `switch.<camera>_flood_light`, `number.<camera>_flood_light_brightness` and
+  `number.<camera>_speaker_volume`. A change Blink calls busy raises an error; one made during a
+  live view is held and written when it ends.
+- `binary_sensor.<camera>_connection`: whether Blink can reach the camera. While Blink calls a
+  camera offline, its other entities are unavailable instead of showing stale values.
+- Clips in Home Assistant's Media panel (Media → Blink clips): a folder per camera and one for all
+  of them, the last 7 days of cloud and Sync Module clips, newest first, with thumbnails, played
+  in place through the clips API.
+- Tests: the arming test no longer flakes (its listener ran on a worker thread).
+
 ## 0.4.1 — faster, steadier live view
 
 - Live view no longer loses the start of the stream: video Blink sent before ffmpeg had connected

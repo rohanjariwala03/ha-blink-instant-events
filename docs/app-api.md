@@ -23,6 +23,9 @@ name. They match unless you rename a device in Home Assistant.
 | `sensor.<camera>_wifi_signal` | dBm, or 0–5 bars on models that report bars (no unit then) | — |
 | `switch.<camera>_motion_detection` | motion detection on/off | — |
 | `button.<camera>_refresh_snapshot` | press: camera takes a new picture (wakes it) | — |
+| `binary_sensor.<camera>_connection` | `on` while Blink can reach the camera; while `off`, the camera's other entities are unavailable | — |
+| `select.<camera>_night_vision` | `auto` / `on` / `off` | — |
+| `switch.<camera>_flood_light`, `number.<camera>_flood_light_brightness` (1–10), `number.<camera>_speaker_volume` (1–8) | only on models with them | — |
 | `event.<camera>_blink_event` | instant event | `event_type` (`motion`, `doorbell_press`, or Blink's raw type), `camera`, `camera_id`, `network_id`, `blink_event_type`, `created_at`, … |
 
 Sensors a camera doesn't report (the doorbell's temperature, for one) are not created.

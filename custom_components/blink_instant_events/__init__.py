@@ -22,6 +22,7 @@ from .const import CONF_AUTH
 from .coordinator import BlinkCoordinator
 from .listener import BlinkPushListener
 from .liveview import LiveViews
+from .settings import BlinkSettings
 from .views import async_register_views
 
 PLATFORMS = [
@@ -30,6 +31,8 @@ PLATFORMS = [
     Platform.BUTTON,
     Platform.CAMERA,
     Platform.EVENT,
+    Platform.NUMBER,
+    Platform.SELECT,
     Platform.SENSOR,
     Platform.SWITCH,
 ]
@@ -43,6 +46,7 @@ class BlinkData:
     listener: BlinkPushListener
     clips: Clips
     live: LiveViews
+    settings: BlinkSettings
 
 
 type BlinkInstantConfigEntry = ConfigEntry[BlinkData]
@@ -89,10 +93,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlinkInstantConfigEntry)
         raise ConfigEntryNotReady(f"Blink push setup failed: {err}") from err
 
     ffmpeg = get_ffmpeg_manager(hass).binary
-    entry.runtime_data = BlinkData(
-        coordinator, listener, Clips(hass, blink, ffmpeg), LiveViews(hass, coordinator, ffmpeg)
-    )
-    entry.runtime_data.live.async_start()
+    live = LiveViews(hass, coordinator, ffmpeg)
+    settings = BlinkSettings(hass, entry, coordinator, live)
+    await settings.async_refresh()  # not fatal: the setting entities stay unavailable until Blink answers
+    entry.runtime_data = BlinkData(coordinator, listener, Clips(hass, blink, ffmpeg), live, settings)
+    live.async_start()
     async_register_views(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True

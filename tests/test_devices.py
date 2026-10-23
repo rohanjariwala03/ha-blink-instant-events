@@ -10,7 +10,7 @@ from blinkpy.auth import UnauthorizedError
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 
@@ -57,10 +57,15 @@ async def test_arm_shows_arming_then_armed(
 ) -> None:
     """Arming is transient 'arming' until Blink confirms."""
     seen: list[str] = []
+    # A callback runs in order on the event loop; a plain function would run on a worker thread, out of order.
     hass.bus.async_listen(
         "state_changed",
-        lambda e: (
-            seen.append(e.data["new_state"].state) if e.data["entity_id"] == "alarm_control_panel.blink_home" else None
+        callback(
+            lambda e: (
+                seen.append(e.data["new_state"].state)
+                if e.data["entity_id"] == "alarm_control_panel.blink_home"
+                else None
+            )
         ),
     )
     await hass.services.async_call(
