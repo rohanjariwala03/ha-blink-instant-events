@@ -1,6 +1,6 @@
 """Phase 3 end to end: a fake Blink IMMIS server -> real ffmpeg -> HLS, talk, controls, last live view.
 
-Needs an ffmpeg binary (imageio-ffmpeg in requirements_test.txt); skipped without one.
+Needs ffmpeg: the system one, else imageio-ffmpeg's; skipped without either.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from collections.abc import AsyncGenerator
 import datetime
 from http import HTTPStatus
 from pathlib import Path
+import shutil
 import ssl
 import subprocess
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -23,8 +24,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant.core import HomeAssistant
 
-imageio_ffmpeg = pytest.importorskip("imageio_ffmpeg")
-FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
+# A system ffmpeg first: imageio's static build segfaults resolving tcp:// on GitHub's runners.
+FFMPEG = shutil.which("ffmpeg") or pytest.importorskip("imageio_ffmpeg").get_ffmpeg_exe()
 BASE = "/api/blink_instant_events/cameras/backyard"
 
 
