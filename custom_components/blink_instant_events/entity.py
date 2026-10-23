@@ -57,9 +57,14 @@ class BlinkCameraEntity(CoordinatorEntity[BlinkCoordinator]):
         return camera
 
     @property
-    def available(self) -> bool:
-        """Unavailable when the poll failed or Blink stopped listing the camera."""
+    def listed(self) -> bool:
+        """The poll worked and Blink still lists the camera."""
         return super().available and self.coordinator.camera(self._serial) is not None
+
+    @property
+    def available(self) -> bool:
+        """Unavailable when the poll failed, Blink stopped listing the camera, or Blink calls it offline."""
+        return self.listed and self.camera.status != "offline"
 
 
 class BlinkSyncEntity(CoordinatorEntity[BlinkCoordinator]):

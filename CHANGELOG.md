@@ -2,8 +2,41 @@
 
 ## Unreleased
 
-- Live view no longer drops the camera's first frames when they arrive before ffmpeg connects
-  (it then had to wait for the next keyframe); ffmpeg's own error is shown when it stops early.
+- When ffmpeg stops early, the live view error now carries its exit code and its last lines.
+- Tests: the fake Blink camera tolerates the client hanging up mid-send; the system ffmpeg is used
+  when there is one.
+- Repo: `CODEOWNERS`, `SECURITY.md` (private vulnerability reporting), Dependabot for GitHub
+  Actions, a read-only workflow token, and push CI on `main` only.
+
+## 0.5.0 — camera settings, offline cameras, clips in the Media panel
+
+- Camera settings as entities, read from Blink's cloud every 30 minutes and right after a change
+  (reading never wakes a camera), written through the same code as the live view's settings
+  sheet: `select.<camera>_night_vision` (auto/on/off) on every camera, and on the models that
+  have them `switch.<camera>_flood_light`, `number.<camera>_flood_light_brightness` and
+  `number.<camera>_speaker_volume`. A change Blink calls busy raises an error; one made during a
+  live view is held and written when it ends.
+- `binary_sensor.<camera>_connection`: whether Blink can reach the camera. While Blink calls a
+  camera offline, its other entities are unavailable instead of showing stale values.
+- Clips in Home Assistant's Media panel (Media → Blink clips): a folder per camera and one for all
+  of them, the last 7 days of cloud and Sync Module clips, newest first, with thumbnails, played
+  in place through the clips API.
+- Tests: the arming test no longer flakes (its listener ran on a worker thread).
+
+## 0.4.1 — faster, steadier live view
+
+- Live view no longer loses the start of the stream: video Blink sent before ffmpeg had connected
+  was dropped, and with it the opening keyframe, so ffmpeg waited for the next one (~4 s) or failed
+  with "Invalid data found when processing input". It is now held until ffmpeg connects.
+- ffmpeg is told the input is MPEG-TS instead of guessing it.
+- The HLS video is re-encoded (libx264, veryfast, zero latency) with a keyframe every second, so
+  every 1 s segment starts with one (`EXT-X-INDEPENDENT-SEGMENTS`). Blink sends a keyframe only
+  every ~4 s, and a player can only start at one: copying kept phones 5-10 s behind and slow to
+  start. About 0.9 Mbit/s; the saved last live view stays Blink's original video. Without libx264
+  the video is copied and cut by time as before.
+- Debug logging times each live view start (Blink's answer, first video, first keyframe, first
+  segment) and logs ffmpeg's own steps.
+- Fixed the connection sensor reading "off" for the first minute after a restart.
 
 ## 0.4.0 — live view and two-way talk
 

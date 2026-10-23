@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from aiohttp import ClientError
 from firebase_messaging import FcmRegisterConfig
 
 DOMAIN = "blink_instant_events"
@@ -9,6 +10,9 @@ DOMAIN = "blink_instant_events"
 CONF_AUTH = "auth"
 CONF_FCM = "fcm"
 CONF_SNAPSHOT_AFTER_MOTION = "snapshot_after_motion"
+
+# What blinkpy and Blink's odd answers raise; reported as 502 (or a failed update) rather than escaping as 500.
+BLINK_ERRORS = (ClientError, RuntimeError, TimeoutError, KeyError, ValueError, TypeError, OSError)
 
 # Public Firebase client identifiers of the Blink Android app (not user secrets).
 FCM_CONFIG = FcmRegisterConfig(

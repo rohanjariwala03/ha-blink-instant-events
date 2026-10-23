@@ -128,6 +128,8 @@ class BlinkPushListener:
         # Associate on every connect: a re-registration yields a new token.
         await self.account.async_associate(token)
         self._associated_at = time.monotonic()
+        # The connection sensor otherwise only refreshes on the next check, a minute after startup.
+        async_dispatcher_send(self.hass, SIGNAL_CONNECTION.format(self.entry.entry_id))
 
     async def _async_check(self, _now: datetime | None = None) -> None:
         """Reconnect with backoff when the client died; re-associate periodically."""
