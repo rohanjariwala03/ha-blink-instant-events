@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.1 — faster, steadier live view
+
+- Live view no longer loses the start of the stream: video Blink sent before ffmpeg had connected
+  was dropped, and with it the opening keyframe, so ffmpeg waited for the next one (~4 s) or failed
+  with "Invalid data found when processing input". It is now held until ffmpeg connects.
+- ffmpeg is told the input is MPEG-TS instead of guessing it.
+- The HLS video is re-encoded (libx264, veryfast, zero latency) with a keyframe every second, so
+  every 1 s segment starts with one (`EXT-X-INDEPENDENT-SEGMENTS`). Blink sends a keyframe only
+  every ~4 s, and a player can only start at one: copying kept phones 5-10 s behind and slow to
+  start. About 0.9 Mbit/s; the saved last live view stays Blink's original video. Without libx264
+  the video is copied and cut by time as before.
+- Debug logging times each live view start (Blink's answer, first video, first keyframe, first
+  segment) and logs ffmpeg's own steps.
+- Fixed the connection sensor reading "off" for the first minute after a restart.
+
 ## 0.4.0 — live view and two-way talk
 
 Ported from Blink Live View Proxy into the integration: no add-on needed.

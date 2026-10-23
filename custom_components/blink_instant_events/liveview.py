@@ -49,6 +49,7 @@ START_TIMEOUT = 30
 # Blink's IMMI framing: 1-byte type, 4-byte sequence, 4-byte length.
 IMMI_HEADER_BYTES = 9
 MAX_IMMI_PAYLOAD = 1024 * 1024
+MAX_BACKLOG_BYTES = 4 * 1024 * 1024
 IMMI_AUDIO, IMMI_SESSION_CMD, IMMI_INLINE_CMD, IMMI_ACCESSORY = 0x05, 0x17, 0x14, 0x15
 CMD_START_AUDIO, CMD_STOP_AUDIO, CMD_LIGHTS_ON, CMD_LIGHTS_OFF = 3, 4, 1, 2
 # Push-to-talk: the app sends s16le mono PCM; the camera wants 16 kHz AAC-LC in IMMI audio frames.
@@ -81,6 +82,11 @@ class ImmisStream(BlinkLiveStream):
         self._write_lock = asyncio.Lock()
         self._guard = AudioGuard(str(camera.name or ""))
         self.flood_light: bool | None = None  # what the camera last reported over this session
+        # Video Blink sends before ffmpeg has connected: blinkpy drops it, and with it the opening keyframe, so
+        # ffmpeg waited for the next one (about 4 s on Blink's cameras) or failed to read the stream at all.
+        self._backlog = bytearray()
+        self.first_video_at: float | None = None  # monotonic times of Blink's first video and first keyframe,
+        self.first_keyframe_at: float | None = None  # for the start-up timing in the debug log
 
     @staticmethod
     def _field(buffer: bytearray, value: str, length: int) -> None:
@@ -123,10 +129,20 @@ class ImmisStream(BlinkLiveStream):
         return header[0], int.from_bytes(header[1:5], "big"), payload
 
     async def _send(self, data: bytes) -> None:
-        for writer in list(self.clients):
-            if not writer.is_closing():
-                writer.write(data)
-                await writer.drain()
+        if self.first_video_at is None:
+            self.first_video_at = time.monotonic()
+        if self.first_keyframe_at is None and (b"\x00\x00\x01\x65" in data or b"\x00\x00\x01\x25" in data):
+            self.first_keyframe_at = time.monotonic()
+        clients = [writer for writer in self.clients if not writer.is_closing()]
+        if not clients:
+            if len(self._backlog) < MAX_BACKLOG_BYTES:
+                self._backlog += data
+            return
+        if self._backlog:
+            data, self._backlog = bytes(self._backlog) + data, bytearray()
+        for writer in clients:
+            writer.write(data)
+            await writer.drain()
 
     async def recv(self) -> None:
         """Copy complete MPEG-TS frames to ffmpeg; note the lamp reports."""
@@ -190,6 +206,8 @@ class LiveSession:
         self._stderr: deque[str] = deque(maxlen=20)
         self._cache = views.cache_root / f"{self.slug}.ts.part"
         self.last_touch = time.monotonic()
+        self.started_at = self.blink_answered_at = self.last_touch
+        self._timed = False
 
     def touch(self) -> None:
         """A viewer is still here."""
@@ -203,20 +221,30 @@ class LiveSession:
     async def start(self) -> None:
         """Open the Blink session and start ffmpeg on it."""
         hass = self.views.hass
+        self.started_at = time.monotonic()
         await hass.async_add_executor_job(self._fresh_dirs)
         self.stream = ImmisStream(self.camera, await request_liveview(self.camera))
+        self.blink_answered_at = time.monotonic()
         await self.stream.start(host="127.0.0.1", port=None)
         self._feed = hass.async_create_background_task(self.stream.feed(), f"blink live view {self.slug}")
-        both = ("-map", "0:v:0", "-map", "0:a:0?", "-c", "copy")
+        streams = ("-map", "0:v:0", "-map", "0:a:0?")
+        video = await self.views.hls_video()
+        flag = "split_by_time" if "copy" in video else "independent_segments"
         self._process = await asyncio.create_subprocess_exec(
             self.views.ffmpeg,
-            *("-hide_banner", "-loglevel", "warning", "-flags", "low_delay"),
-            # Short probe: ffmpeg's default put the first segment at Blink's third keyframe (~12 s).
-            *("-probesize", "1000000", "-analyzeduration", "500000"),
-            *("-i", self.stream.url, *both, "-f", "hls", "-hls_time", "1", "-hls_list_size", "8"),
-            *("-hls_flags", "delete_segments+omit_endlist+program_date_time+split_by_time"),
+            *("-hide_banner", "-loglevel", "verbose" if _LOGGER.isEnabledFor(logging.DEBUG) else "warning"),
+            *("-flags", "low_delay", "-fflags", "nobuffer"),
+            # The format is known (guessing it failed on some starts), and a short probe: ffmpeg's default reads
+            # 5 MB first, which takes minutes at Blink's bitrate.
+            *("-f", "mpegts", "-probesize", "1000000", "-analyzeduration", "500000", "-i", self.stream.url),
+            *streams,
+            *video,
+            *("-c:a", "copy", "-f", "hls", "-hls_time", "1", "-hls_list_size", "6"),
+            # Re-encoded segments each start with a keyframe; copied ones are cut by time instead.
+            *("-hls_flags", "delete_segments+omit_endlist+program_date_time+" + flag),
             *("-hls_segment_filename", str(self.directory / "segment_%05d.ts"), str(self.playlist)),
-            *(*both, "-f", "mpegts", str(self._cache)),
+            # The copy kept as the last live view: Blink's own video, untouched.
+            *(*streams, "-c", "copy", "-f", "mpegts", str(self._cache)),
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
@@ -232,7 +260,10 @@ class LiveSession:
     async def _drain(self) -> None:
         assert self._process and self._process.stderr
         async for line in self._process.stderr:
-            self._stderr.append(line.decode(errors="replace").strip())
+            text = line.decode(errors="replace").strip()
+            self._stderr.append(text)
+            # With debug logging, ffmpeg runs verbose: its steps, timed from the start of the live view.
+            _LOGGER.debug("ffmpeg %s +%.2f s: %s", self.slug, time.monotonic() - self.started_at, text)
 
     async def wait_ready(self) -> None:
         """Until ffmpeg has written the first playlist."""
@@ -244,6 +275,17 @@ class LiveSession:
             if self._feed and self._feed.done():
                 raise RuntimeError(f"Could not connect to the camera's stream: {self._feed.exception()!r}")
             if await self.views.hass.async_add_executor_job(_nonempty, self.playlist):
+                if not self._timed and self.stream and self.stream.first_video_at:
+                    self._timed = True
+                    keyframe = self.stream.first_keyframe_at
+                    _LOGGER.debug(
+                        "Live view of %s ready in %.1f s: Blink answered %.1f s, first video %.1f s, keyframe %s",
+                        self.camera.name,
+                        time.monotonic() - self.started_at,
+                        self.blink_answered_at - self.started_at,
+                        self.stream.first_video_at - self.started_at,
+                        f"{keyframe - self.started_at:.1f} s" if keyframe else "not seen",
+                    )
                 return
             await asyncio.sleep(0.2)
         raise TimeoutError("The camera sent no video in time")
@@ -298,8 +340,37 @@ class LiveViews:
         self.viewers: dict[str, LiveSession] = {}  # "<slug>:<session>" -> session, for talk and controls
         self.deferred = controls.DeferredControls()
         self._tokens: dict[str, _Token] = {}
+        self._hls_video: tuple[str, ...] | None = None
         self._locks: dict[str, asyncio.Lock] = {}
         self._flushes: dict[str, asyncio.Task[None]] = {}
+
+    async def hls_video(self) -> tuple[str, ...]:
+        """How ffmpeg writes the HLS video.
+
+        Blink's cameras send a keyframe only every ~4 s, and a player can only start (and catch up) at one, so
+        copying the video kept phones 5-10 s behind and slow to start. Re-encoding it with a keyframe every second
+        lets every 1 s segment start one; 720p at 15 fps costs a few percent of one core. Without libx264, the
+        video is copied and cut by time as before.
+        """
+        if self._hls_video is None:
+            process = await asyncio.create_subprocess_exec(
+                self.ffmpeg,
+                *("-hide_banner", "-encoders"),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            encoders, _ = await process.communicate()
+            if b" libx264 " in encoders:
+                self._hls_video = (
+                    *("-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-pix_fmt", "yuv420p"),
+                    *("-force_key_frames", "expr:gte(t,n_forced*1)", "-sc_threshold", "0"),
+                    # About 3x Blink's own bitrate (keyframes every second cost bits); fine over cellular.
+                    *("-crf", "27", "-maxrate", "900k", "-bufsize", "900k"),
+                )
+            else:
+                _LOGGER.warning("ffmpeg has no libx264: live view is copied, and starts slower")
+                self._hls_video = ("-c:v", "copy")
+        return self._hls_video
 
     @callback
     def async_start(self) -> None:

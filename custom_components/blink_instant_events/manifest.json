@@ -22,5 +22,5 @@
     "firebase-messaging==0.4.5"
   ],
   "single_config_entry": true,
-  "version": "0.4.0"
+  "version": "0.4.1"
 }
