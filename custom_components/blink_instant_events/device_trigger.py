@@ -15,9 +15,9 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.trigger import TriggerActionType, TriggerInfo
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN, EVENT_DOORBELL, EVENT_MOTION
+from .const import DOMAIN, EVENT_DETECTION, EVENT_DOORBELL, EVENT_MOTION
 
-TRIGGER_TYPES = (EVENT_MOTION, EVENT_DOORBELL)
+TRIGGER_TYPES = (EVENT_MOTION, EVENT_DOORBELL, EVENT_DETECTION)
 
 TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend(
     {

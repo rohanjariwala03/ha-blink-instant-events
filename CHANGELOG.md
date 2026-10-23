@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Smart detection with the new **Blink Vision** add-on (in this repository): each new clip is
+  read locally for faces (taught by name), people, vehicles and animals. Results fire as a
+  `detection` event (with a signed link to the frame, boxes drawn), show in
+  `image.<camera>_last_detection`, and label clips in the clips API. People API to teach and
+  forget faces. A motion push starts looking for its clip right away.
+- `blink_instant_events.show_on_tv`: a camera's live view on a Cast TV, e.g. when the doorbell
+  rings; finds the Cast entity of a TV added through another integration.
+- The push reconnect now waits out its backoff before re-pairing with Blink too (it retried every
+  minute while Blink was unreachable).
+
 - When ffmpeg stops early, the live view error now carries its exit code and its last lines.
 - Tests: the fake Blink camera tolerates the client hanging up mid-send; the system ffmpeg is used
   when there is one.

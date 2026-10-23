@@ -14,16 +14,20 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .api import BlinkAccount, BlinkAuth
 from .clips import Clips
-from .const import CONF_AUTH
+from .const import CONF_AUTH, DOMAIN
 from .coordinator import BlinkCoordinator
 from .listener import BlinkPushListener
 from .liveview import LiveViews
 from .settings import BlinkSettings
+from .tv import async_setup_services
 from .views import async_register_views
+from .vision import Vision
 
 PLATFORMS = [
     Platform.ALARM_CONTROL_PANEL,
@@ -31,6 +35,7 @@ PLATFORMS = [
     Platform.BUTTON,
     Platform.CAMERA,
     Platform.EVENT,
+    Platform.IMAGE,
     Platform.NUMBER,
     Platform.SELECT,
     Platform.SENSOR,
@@ -47,9 +52,19 @@ class BlinkData:
     clips: Clips
     live: LiveViews
     settings: BlinkSettings
+    vision: Vision
 
 
 type BlinkInstantConfigEntry = ConfigEntry[BlinkData]
+
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Actions exist even while the account is being set up."""
+    async_setup_services(hass)
+    return True
 
 
 def push_devices(blink: Blink) -> list[dict[str, Any]]:
@@ -81,9 +96,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlinkInstantConfigEntry)
     coordinator = BlinkCoordinator(hass, entry, blink)
     await coordinator.async_config_entry_first_refresh()
 
-    listener = BlinkPushListener(
-        hass, entry, BlinkAccount(session, auth), push_devices(blink), coordinator.async_on_push
-    )
+    ffmpeg = get_ffmpeg_manager(hass).binary
+    clips = Clips(hass, blink, ffmpeg)
+    vision = Vision(hass, entry, coordinator, clips, ffmpeg)
+
+    @callback
+    def on_push(camera_id: str, event_type: str) -> None:
+        coordinator.async_on_push(camera_id, event_type)
+        vision.async_on_push(camera_id, event_type)
+
+    listener = BlinkPushListener(hass, entry, BlinkAccount(session, auth), push_devices(blink), on_push)
     try:
         await listener.async_start()
     except (UnauthorizedError, ClientError, TimeoutError, RuntimeError) as err:
@@ -92,11 +114,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlinkInstantConfigEntry)
             raise ConfigEntryAuthFailed from err
         raise ConfigEntryNotReady(f"Blink push setup failed: {err}") from err
 
-    ffmpeg = get_ffmpeg_manager(hass).binary
     live = LiveViews(hass, coordinator, ffmpeg)
     settings = BlinkSettings(hass, entry, coordinator, live)
     await settings.async_refresh()  # not fatal: the setting entities stay unavailable until Blink answers
-    entry.runtime_data = BlinkData(coordinator, listener, Clips(hass, blink, ffmpeg), live, settings)
+    await vision.async_start()  # not fatal either: smart detection stays off until Blink Vision answers
+    entry.runtime_data = BlinkData(coordinator, listener, clips, live, settings, vision)
     live.async_start()
     async_register_views(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

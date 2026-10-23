@@ -15,7 +15,7 @@ from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, CONF_PIN
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_AUTH, CONF_SNAPSHOT_AFTER_MOTION, DOMAIN
+from .const import CONF_AUTH, CONF_SNAPSHOT_AFTER_MOTION, CONF_VISION_URL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -104,20 +104,23 @@ class BlinkInstantEventsConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class BlinkOptionsFlow(OptionsFlow):
-    """Snapshot after motion costs battery, so it is off until you turn it on."""
+    """Snapshot after motion costs battery, so it is off until you turn it on. Blink Vision is found by itself."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """One switch."""
+        """A switch, and where Blink Vision runs if it isn't the add-on."""
         if user_input is not None:
             return self.async_create_entry(data=user_input)
+        options = self.config_entry.options
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        CONF_SNAPSHOT_AFTER_MOTION,
-                        default=self.config_entry.options.get(CONF_SNAPSHOT_AFTER_MOTION, False),
-                    ): bool
+                        CONF_SNAPSHOT_AFTER_MOTION, default=options.get(CONF_SNAPSHOT_AFTER_MOTION, False)
+                    ): bool,
+                    vol.Optional(
+                        CONF_VISION_URL, description={"suggested_value": options.get(CONF_VISION_URL)}
+                    ): vol.All(str, vol.Match(r"^https?://\S+$")),
                 }
             ),
         )
