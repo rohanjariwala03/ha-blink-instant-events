@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Live view no longer drops the camera's first frames when they arrive before ffmpeg connects
+  (it then had to wait for the next keyframe); ffmpeg's own error is shown when it stops early.
+
 ## 0.4.0 — live view and two-way talk
 
 Ported from Blink Live View Proxy into the integration: no add-on needed.

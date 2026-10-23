@@ -81,6 +81,12 @@ class ImmisStream(BlinkLiveStream):
         self._write_lock = asyncio.Lock()
         self._guard = AudioGuard(str(camera.name or ""))
         self.flood_light: bool | None = None  # what the camera last reported over this session
+        self._joined = asyncio.Event()
+
+    async def join(self, client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter) -> None:
+        """ffmpeg connected; from now on frames have somewhere to go."""
+        self._joined.set()
+        await super().join(client_reader, client_writer)
 
     @staticmethod
     def _field(buffer: bytearray, value: str, length: int) -> None:
@@ -131,6 +137,8 @@ class ImmisStream(BlinkLiveStream):
     async def recv(self) -> None:
         """Copy complete MPEG-TS frames to ffmpeg; note the lamp reports."""
         try:
+            # Until ffmpeg connects, Blink's opening frames (PAT/PMT, first keyframe) would be dropped.
+            await asyncio.wait_for(self._joined.wait(), START_TIMEOUT)
             while not self.target_reader.at_eof():
                 frame = await self._read_frame()
                 if frame is None:
@@ -146,7 +154,7 @@ class ImmisStream(BlinkLiveStream):
         except ssl.SSLError as err:
             if err.reason != "APPLICATION_DATA_AFTER_CLOSE_NOTIFY":
                 _LOGGER.warning("Live view TLS error on %s: %s", self.camera.name, err.reason)
-        except (ConnectionError, OSError) as err:
+        except (ConnectionError, OSError, TimeoutError) as err:
             _LOGGER.debug("Live view of %s ended: %s", self.camera.name, err)
         finally:
             if self.target_writer is not None and not self.target_writer.is_closing():
@@ -188,6 +196,7 @@ class LiveSession:
         self._feed: asyncio.Task[None] | None = None
         self._process: asyncio.subprocess.Process | None = None
         self._stderr: deque[str] = deque(maxlen=20)
+        self._drainer: asyncio.Task[None] | None = None
         self._cache = views.cache_root / f"{self.slug}.ts.part"
         self.last_touch = time.monotonic()
 
@@ -221,7 +230,7 @@ class LiveSession:
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
         )
-        hass.async_create_background_task(self._drain(), f"blink ffmpeg log {self.slug}")
+        self._drainer = hass.async_create_background_task(self._drain(), f"blink ffmpeg log {self.slug}")
         _LOGGER.info("Live view started on %s", self.camera.name)
 
     def _fresh_dirs(self) -> None:
@@ -240,6 +249,8 @@ class LiveSession:
         while time.monotonic() < deadline:
             self.touch()
             if not self.running:
+                if self._drainer:  # let the last lines in: they say why
+                    await asyncio.wait([self._drainer], timeout=1)
                 raise RuntimeError(f"ffmpeg stopped: {' | '.join(self._stderr) or 'no output'}")
             if self._feed and self._feed.done():
                 raise RuntimeError(f"Could not connect to the camera's stream: {self._feed.exception()!r}")

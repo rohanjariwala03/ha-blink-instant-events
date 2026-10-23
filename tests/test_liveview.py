@@ -75,11 +75,14 @@ class FakeImmis:
         self.auth = await reader.readexactly(122)
         listen = asyncio.create_task(self._listen(reader))
         writer.write(bytes([0x15]) + (0).to_bytes(4, "big") + (0).to_bytes(4, "big"))  # lamp reports "off"
-        for seq, start in enumerate(range(0, len(self.ts), 188 * 7)):
-            chunk = self.ts[start : start + 188 * 7]
-            writer.write(bytes([0]) + seq.to_bytes(4, "big") + len(chunk).to_bytes(4, "big") + chunk)
-            await writer.drain()
-            await asyncio.sleep(0.001)
+        try:
+            for seq, start in enumerate(range(0, len(self.ts), 188 * 7)):
+                chunk = self.ts[start : start + 188 * 7]
+                writer.write(bytes([0]) + seq.to_bytes(4, "big") + len(chunk).to_bytes(4, "big") + chunk)
+                await writer.drain()
+                await asyncio.sleep(0.001)
+        except ConnectionError:
+            pass  # the client stopped the live view while we were still sending
         await listen  # stay connected until the client hangs up
 
     async def _listen(self, reader: asyncio.StreamReader) -> None:
