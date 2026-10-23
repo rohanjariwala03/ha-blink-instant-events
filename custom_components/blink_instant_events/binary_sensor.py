@@ -33,7 +33,11 @@ async def async_setup_entry(
     coordinator = entry.runtime_data.coordinator
     entities: list[BinarySensorEntity] = [BlinkPushConnected(entry)]
     for cam in coordinator.blink.cameras.values():
-        entities += [BlinkMotion(coordinator, cam), BlinkBattery(coordinator, cam, "battery")]
+        entities += [
+            BlinkMotion(coordinator, cam),
+            BlinkBattery(coordinator, cam, "battery"),
+            BlinkCameraConnected(coordinator, cam, "camera_connection"),
+        ]
     entities += [BlinkSyncConnected(coordinator, sync, "connection") for sync in coordinator.syncs().values()]
     async_add_entities(entities)
 
@@ -159,3 +163,21 @@ class BlinkSyncConnected(BlinkSyncEntity, BinarySensorEntity):
         """Blink's status is "online" or "offline"."""
         status = self.sync.status
         return str(status).lower() == "online" if status else None
+
+
+class BlinkCameraConnected(BlinkCameraEntity, BinarySensorEntity):
+    """Whether Blink can reach the camera. While it can't, the camera's other entities are unavailable."""
+
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def available(self) -> bool:
+        """Stays available to say the camera is offline."""
+        return self.listed
+
+    @property
+    def is_on(self) -> bool | None:
+        """Blink's status: "online" or "done" when reachable, "offline" when not."""
+        status = self.camera.status
+        return None if status is None else status != "offline"

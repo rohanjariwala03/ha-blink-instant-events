@@ -8,7 +8,7 @@ import secrets
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
-from aiohttp import ClientError, web
+from aiohttp import web
 from blinkpy.auth import UnauthorizedError
 
 from homeassistant.components.http import KEY_AUTHENTICATED, HomeAssistantView
@@ -18,7 +18,7 @@ from homeassistant.util.unit_conversion import TemperatureConverter
 
 from . import controls
 from .clips import API as CLIPS_API, clip_id, public_clip
-from .const import DOMAIN
+from .const import BLINK_ERRORS, DOMAIN
 from .liveview import TOKEN_TTL_SECONDS, LiveViews, control_row, ptt_supported, talk
 
 if TYPE_CHECKING:
@@ -56,10 +56,6 @@ def runtime(request: web.Request) -> BlinkData:
     if not entries:
         raise web.HTTPServiceUnavailable(text="Blink Instant Events is not loaded\n")
     return entries[0].runtime_data
-
-
-# What blinkpy and Blink's odd answers raise; reported as 502 rather than escaping as 500.
-BLINK_ERRORS = (ClientError, RuntimeError, TimeoutError, KeyError, ValueError, TypeError, OSError)
 
 
 def blink_failed(request: web.Request, err: Exception) -> web.HTTPException:

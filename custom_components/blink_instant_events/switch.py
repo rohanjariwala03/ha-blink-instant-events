@@ -1,4 +1,4 @@
-"""Per-camera motion detection, the Blink app's camera toggle."""
+"""Per-camera motion detection (the Blink app's camera toggle), and the flood light on floodlight cameras."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BlinkInstantConfigEntry
 from .entity import BlinkCameraEntity
+from .settings import BlinkSettingEntity, offered
 
 PARALLEL_UPDATES = 0
 
@@ -22,8 +23,12 @@ async def async_setup_entry(
 ) -> None:
     """One switch per camera."""
     coordinator = entry.runtime_data.coordinator
+    settings = entry.runtime_data.settings
     async_add_entities(
-        BlinkMotionSwitch(coordinator, cam, "motion_detection") for cam in coordinator.blink.cameras.values()
+        [
+            *(BlinkMotionSwitch(coordinator, cam, "motion_detection") for cam in coordinator.blink.cameras.values()),
+            *(BlinkFloodLight(settings, cam, "flood_light") for cam in offered(settings, "flood_light")),
+        ]
     )
 
 
@@ -54,3 +59,22 @@ class BlinkMotionSwitch(BlinkCameraEntity, SwitchEntity):
             raise HomeAssistantError(
                 f"Blink accepted the request to {what} but did not apply it; try again in a minute"
             )
+
+
+class BlinkFloodLight(BlinkSettingEntity, SwitchEntity):
+    """The floodlight's lamp. During a live view it goes over the live session, as in the Blink app."""
+
+    _setting = "flood_light"
+
+    @property
+    def is_on(self) -> bool | None:
+        """As Blink reports it."""
+        return self.value
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Light it."""
+        await self._async_set(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Put it out."""
+        await self._async_set(False)

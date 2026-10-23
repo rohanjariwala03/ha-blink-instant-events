@@ -10,6 +10,7 @@ from collections.abc import AsyncGenerator
 import datetime
 from http import HTTPStatus
 from pathlib import Path
+import shutil
 import ssl
 import subprocess
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -24,7 +25,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from homeassistant.core import HomeAssistant
 
 imageio_ffmpeg = pytest.importorskip("imageio_ffmpeg")
-FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
+# The system ffmpeg when there is one (CI installs it): imageio's static x86-64 build exits without a word there.
+FFMPEG = shutil.which("ffmpeg") or imageio_ffmpeg.get_ffmpeg_exe()
 BASE = "/api/blink_instant_events/cameras/backyard"
 
 

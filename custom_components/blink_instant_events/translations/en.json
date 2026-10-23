@@ -56,6 +56,9 @@
       },
       "connection": {
         "name": "Connection"
+      },
+      "camera_connection": {
+        "name": "Connection"
       }
     },
     "button": {
@@ -98,6 +101,27 @@
     "switch": {
       "motion_detection": {
         "name": "Motion detection"
+      },
+      "flood_light": {
+        "name": "Flood light"
+      }
+    },
+    "select": {
+      "night_vision": {
+        "name": "Night vision",
+        "state": {
+          "auto": "Auto",
+          "on": "On",
+          "off": "Off"
+        }
+      }
+    },
+    "number": {
+      "brightness": {
+        "name": "Flood light brightness"
+      },
+      "volume": {
+        "name": "Speaker volume"
       }
     }
   },

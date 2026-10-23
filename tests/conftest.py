@@ -80,6 +80,7 @@ def _camera(sync: MagicMock, **attrs: object) -> MagicMock:
     cam.version = "1.0"
     cam._cached_image = cam.image_from_cache = b"jpeg-" + str(attrs["serial"]).encode()
     cam.thumbnail = None
+    cam.status = "online"
     for key, value in attrs.items():
         setattr(cam, key, value)
     cam.attributes = {"name": attrs["name"], "serial": attrs["serial"], "thumbnail": "https://rest-u001/thumb?ts=1"}
@@ -155,7 +156,12 @@ def mock_blink() -> Generator[MagicMock]:
             ),
         }
     )
-    with patch("custom_components.blink_instant_events.Blink", return_value=blink):
+    # Camera settings, read from Blink's cloud: night vision on auto (code 2).
+    settings = AsyncMock(return_value={"camera": [{"illuminator_enable": 2}]})
+    with (
+        patch("custom_components.blink_instant_events.Blink", return_value=blink),
+        patch("custom_components.blink_instant_events.controls.blink_api.request_camera_info", settings),
+    ):
         yield blink
 
 
