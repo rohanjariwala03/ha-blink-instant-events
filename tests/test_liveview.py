@@ -1,6 +1,6 @@
 """Phase 3 end to end: a fake Blink IMMIS server -> real ffmpeg -> HLS, talk, controls, last live view.
 
-Needs an ffmpeg binary (imageio-ffmpeg in requirements_test.txt); skipped without one.
+Needs ffmpeg: the system one, else imageio-ffmpeg's; skipped without either.
 """
 
 from __future__ import annotations
@@ -24,9 +24,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant.core import HomeAssistant
 
-imageio_ffmpeg = pytest.importorskip("imageio_ffmpeg")
-# The system ffmpeg when there is one (CI installs it): imageio's static x86-64 build exits without a word there.
-FFMPEG = shutil.which("ffmpeg") or imageio_ffmpeg.get_ffmpeg_exe()
+# A system ffmpeg first: imageio's static build segfaults resolving tcp:// on GitHub's runners.
+FFMPEG = shutil.which("ffmpeg") or pytest.importorskip("imageio_ffmpeg").get_ffmpeg_exe()
 BASE = "/api/blink_instant_events/cameras/backyard"
 
 
@@ -77,11 +76,14 @@ class FakeImmis:
         self.auth = await reader.readexactly(122)
         listen = asyncio.create_task(self._listen(reader))
         writer.write(bytes([0x15]) + (0).to_bytes(4, "big") + (0).to_bytes(4, "big"))  # lamp reports "off"
-        for seq, start in enumerate(range(0, len(self.ts), 188 * 7)):
-            chunk = self.ts[start : start + 188 * 7]
-            writer.write(bytes([0]) + seq.to_bytes(4, "big") + len(chunk).to_bytes(4, "big") + chunk)
-            await writer.drain()
-            await asyncio.sleep(0.001)
+        try:
+            for seq, start in enumerate(range(0, len(self.ts), 188 * 7)):
+                chunk = self.ts[start : start + 188 * 7]
+                writer.write(bytes([0]) + seq.to_bytes(4, "big") + len(chunk).to_bytes(4, "big") + chunk)
+                await writer.drain()
+                await asyncio.sleep(0.001)
+        except ConnectionError:
+            pass  # the client stopped the live view while we were still sending
         await listen  # stay connected until the client hangs up
 
     async def _listen(self, reader: asyncio.StreamReader) -> None:

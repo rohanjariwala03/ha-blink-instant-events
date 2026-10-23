@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- When ffmpeg stops early, the live view error now carries its exit code and its last lines.
+- Tests: the fake Blink camera tolerates the client hanging up mid-send; the system ffmpeg is used
+  when there is one.
+- Repo: `CODEOWNERS`, `SECURITY.md` (private vulnerability reporting), Dependabot for GitHub
+  Actions, a read-only workflow token, and push CI on `main` only.
+
 ## 0.5.0 — camera settings, offline cameras, clips in the Media panel
 
 - Camera settings as entities, read from Blink's cloud every 30 minutes and right after a change

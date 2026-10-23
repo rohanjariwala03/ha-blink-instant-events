@@ -204,6 +204,7 @@ class LiveSession:
         self._feed: asyncio.Task[None] | None = None
         self._process: asyncio.subprocess.Process | None = None
         self._stderr: deque[str] = deque(maxlen=20)
+        self._drainer: asyncio.Task[None] | None = None
         self._cache = views.cache_root / f"{self.slug}.ts.part"
         self.last_touch = time.monotonic()
         self.started_at = self.blink_answered_at = self.last_touch
@@ -249,7 +250,7 @@ class LiveSession:
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
         )
-        hass.async_create_background_task(self._drain(), f"blink ffmpeg log {self.slug}")
+        self._drainer = hass.async_create_background_task(self._drain(), f"blink ffmpeg log {self.slug}")
         _LOGGER.info("Live view started on %s", self.camera.name)
 
     def _fresh_dirs(self) -> None:
@@ -271,7 +272,11 @@ class LiveSession:
         while time.monotonic() < deadline:
             self.touch()
             if not self.running:
-                raise RuntimeError(f"ffmpeg stopped: {' | '.join(self._stderr) or 'no output'}")
+                if self._drainer:  # let the last lines in: they say why
+                    await asyncio.wait([self._drainer], timeout=1)
+                raise RuntimeError(
+                    f"ffmpeg stopped ({self._process.returncode}): {' | '.join(self._stderr) or 'no output'}"
+                )
             if self._feed and self._feed.done():
                 raise RuntimeError(f"Could not connect to the camera's stream: {self._feed.exception()!r}")
             if await self.views.hass.async_add_executor_job(_nonempty, self.playlist):

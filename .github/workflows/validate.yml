@@ -2,8 +2,12 @@ name: Validate
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   hassfest:
@@ -29,9 +33,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: pip install -r requirements_test.txt ruff
       - run: ruff check custom_components tests
       - run: ruff format --check custom_components tests
-      # The live view test runs Home Assistant's ffmpeg, which the runner doesn't have.
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: pytest -q
