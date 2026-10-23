@@ -91,7 +91,7 @@ async def test_device_triggers(hass: HomeAssistant, setup_entry) -> None:
     device = dr.async_get(hass).async_get_device_by_identifier((DOMAIN, "G8T1-0002"), setup_entry.entry_id)
     triggers = await async_get_device_automations(hass, DeviceAutomationType.TRIGGER, device.id)
     ours = [t for t in triggers if t["domain"] == DOMAIN]
-    assert {t["type"] for t in ours} == {"motion", "doorbell_press"}
+    assert {t["type"] for t in ours} == {"motion", "doorbell_press", "detection"}
 
     calls: list = []
     hass.services.async_register("test", "record", lambda call: calls.append(call))

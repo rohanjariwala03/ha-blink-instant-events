@@ -40,7 +40,8 @@
   "device_automation": {
     "trigger_type": {
       "motion": "Motion detected",
-      "doorbell_press": "Doorbell pressed"
+      "doorbell_press": "Doorbell pressed",
+      "detection": "Smart detection finished"
     }
   },
   "entity": {
@@ -78,7 +79,8 @@
           "event_type": {
             "state": {
               "motion": "Motion detected",
-              "doorbell_press": "Doorbell pressed"
+              "doorbell_press": "Doorbell pressed",
+              "detection": "Smart detection"
             }
           }
         }
@@ -123,6 +125,11 @@
       "volume": {
         "name": "Speaker volume"
       }
+    },
+    "image": {
+      "last_detection": {
+        "name": "Last detection"
+      }
     }
   },
   "options": {
@@ -130,10 +137,36 @@
       "init": {
         "title": "Blink Instant Events options",
         "data": {
-          "snapshot_after_motion": "Take a snapshot after each motion"
+          "snapshot_after_motion": "Take a snapshot after each motion",
+          "vision_url": "Blink Vision URL"
         },
         "data_description": {
-          "snapshot_after_motion": "About 30 s after a motion push, ask the camera for a new picture (at most once per camera every 5 minutes). Each one wakes the camera, so it costs battery."
+          "snapshot_after_motion": "About 30 s after a motion push, ask the camera for a new picture (at most once per camera every 5 minutes). Each one wakes the camera, so it costs battery.",
+          "vision_url": "Leave empty to use the Blink Vision add-on. Set it only if Blink Vision runs somewhere else, e.g. http://192.168.1.20:8000."
+        }
+      }
+    }
+  },
+  "services": {
+    "show_on_tv": {
+      "name": "Show on TV",
+      "description": "Plays a camera's live view on a TV or Chromecast, e.g. when the doorbell rings.",
+      "fields": {
+        "camera": {
+          "name": "Camera",
+          "description": "The Blink camera."
+        },
+        "media_player": {
+          "name": "TV",
+          "description": "The TV. If it is not a Cast device, the Cast device on the same TV is used."
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "Seconds to show it before the TV goes back."
+        },
+        "only_if_on": {
+          "name": "Only if the TV is on",
+          "description": "Do nothing when the TV is off, instead of turning it on."
         }
       }
     }

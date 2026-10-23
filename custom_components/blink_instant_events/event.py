@@ -1,4 +1,4 @@
-"""One event entity per Blink camera: motion, doorbell_press, or Blink's raw type."""
+"""One event entity per Blink camera: motion, doorbell_press, detection (Blink Vision), or Blink's raw type."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BlinkInstantConfigEntry
-from .const import DOMAIN, EVENT_DOORBELL, EVENT_MOTION, SIGNAL_EVENT
+from .const import DOMAIN, EVENT_DETECTION, EVENT_DOORBELL, EVENT_MOTION, SIGNAL_EVENT
 
 PARALLEL_UPDATES = 0
 
@@ -43,7 +43,7 @@ class BlinkInstantEvent(EventEntity):
             name=device["name"],
             serial_number=device["serial"],
         )
-        self._attr_event_types = [EVENT_MOTION] + ([EVENT_DOORBELL] if device["doorbell"] else [])
+        self._attr_event_types = [EVENT_MOTION, *([EVENT_DOORBELL] if device["doorbell"] else []), EVENT_DETECTION]
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to pushes for this camera."""

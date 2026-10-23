@@ -136,14 +136,16 @@ class BlinkPushListener:
         if self._lock.locked():
             return
         async with self._lock:
+            if time.monotonic() < self._next_try:
+                return
             try:
                 if self._client and self._client.run_state not in DEAD_STATES:
                     if time.monotonic() - self._associated_at > REASSOCIATE_SECONDS:
                         await self.account.async_associate(self._client.credentials["fcm"]["registration"]["token"])
                         self._associated_at = time.monotonic()
-                elif time.monotonic() >= self._next_try:
+                else:
                     await self._async_connect()
-                    self._failures = 0
+                self._failures = 0
             except UnauthorizedError:
                 _LOGGER.warning("Blink session expired; sign in again")
                 self.entry.async_start_reauth(self.hass)

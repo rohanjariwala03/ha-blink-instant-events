@@ -1,0 +1,24 @@
+show_on_tv:
+  fields:
+    camera:
+      required: true
+      selector:
+        entity:
+          integration: blink_instant_events
+          domain: camera
+    media_player:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    duration:
+      default: 60
+      selector:
+        number:
+          min: 10
+          max: 300
+          unit_of_measurement: s
+    only_if_on:
+      default: true
+      selector:
+        boolean:
