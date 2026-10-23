@@ -1,13 +1,26 @@
 {
   "domain": "blink_instant_events",
   "name": "Blink Instant Events",
-  "codeowners": ["@rohanjariwala03"],
+  "codeowners": [
+    "@rohanjariwala03"
+  ],
   "config_flow": true,
+  "dependencies": [
+    "ffmpeg",
+    "http"
+  ],
   "documentation": "https://github.com/rohanjariwala03/ha-blink-instant-events",
   "integration_type": "hub",
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/rohanjariwala03/ha-blink-instant-events/issues",
-  "loggers": ["blinkpy", "firebase_messaging"],
-  "requirements": ["blinkpy>=0.25.9", "firebase-messaging==0.4.5"],
-  "version": "0.1.0"
+  "loggers": [
+    "blinkpy",
+    "firebase_messaging"
+  ],
+  "requirements": [
+    "blinkpy>=0.25.9",
+    "firebase-messaging==0.4.5"
+  ],
+  "single_config_entry": true,
+  "version": "0.4.0"
 }

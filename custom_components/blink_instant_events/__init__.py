@@ -1,46 +1,99 @@
-"""Blink Instant Events: real-time Blink motion and doorbell events over FCM push."""
+"""Blink Instant Events: Blink cameras in Home Assistant, with real-time events over FCM push."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from aiohttp import ClientError
+from blinkpy.auth import UnauthorizedError
+from blinkpy.blinkpy import Blink
 
+from homeassistant.components.ffmpeg import get_ffmpeg_manager
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import BlinkAccount, BlinkAuthError
+from .api import BlinkAccount, BlinkAuth
+from .clips import Clips
 from .const import CONF_AUTH
+from .coordinator import BlinkCoordinator
 from .listener import BlinkPushListener
+from .liveview import LiveViews
+from .views import async_register_views
 
-PLATFORMS = [Platform.BINARY_SENSOR, Platform.EVENT]
+PLATFORMS = [
+    Platform.ALARM_CONTROL_PANEL,
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
+    Platform.CAMERA,
+    Platform.EVENT,
+    Platform.SENSOR,
+    Platform.SWITCH,
+]
 
-type BlinkInstantConfigEntry = ConfigEntry[BlinkPushListener]
+
+@dataclass
+class BlinkData:
+    """What the platforms share."""
+
+    coordinator: BlinkCoordinator
+    listener: BlinkPushListener
+    clips: Clips
+    live: LiveViews
+
+
+type BlinkInstantConfigEntry = ConfigEntry[BlinkData]
+
+
+def push_devices(blink: Blink) -> list[dict[str, Any]]:
+    """The cameras as the push listener matches them."""
+    return [
+        {
+            "id": str(cam.camera_id),
+            "name": cam.name,
+            "serial": cam.serial,
+            "type": cam.product_type,
+            "network_id": int(cam.network_id) if str(cam.network_id).isdigit() else cam.network_id,
+            "doorbell": cam.camera_type == "doorbell",
+        }
+        for cam in blink.cameras.values()
+    ]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: BlinkInstantConfigEntry) -> bool:
-    """Sign in with the stored Blink session, start the push listener."""
+    """Restore the stored Blink session, load the cameras, start the push listener."""
 
     @callback
     def save_auth(auth: dict[str, Any]) -> None:
+        auth.pop("password", None)
         hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_AUTH: auth})
 
-    account = BlinkAccount(async_get_clientsession(hass), dict(entry.data[CONF_AUTH]), save_auth)
-    listener: BlinkPushListener | None = None
+    session = async_get_clientsession(hass)
+    blink = Blink(session=session)
+    blink.auth = auth = BlinkAuth(session, dict(entry.data[CONF_AUTH]), save_auth)
+    coordinator = BlinkCoordinator(hass, entry, blink)
+    await coordinator.async_config_entry_first_refresh()
+
+    listener = BlinkPushListener(
+        hass, entry, BlinkAccount(session, auth), push_devices(blink), coordinator.async_on_push
+    )
     try:
-        listener = BlinkPushListener(hass, entry, account, await account.async_get_devices())
         await listener.async_start()
-    except (BlinkAuthError, ClientError, TimeoutError, RuntimeError) as err:
-        if listener:
-            await listener.async_stop()
-        if isinstance(err, BlinkAuthError):
+    except (UnauthorizedError, ClientError, TimeoutError, RuntimeError) as err:
+        await listener.async_stop()
+        if isinstance(err, UnauthorizedError):
             raise ConfigEntryAuthFailed from err
         raise ConfigEntryNotReady(f"Blink push setup failed: {err}") from err
 
-    entry.runtime_data = listener
+    ffmpeg = get_ffmpeg_manager(hass).binary
+    entry.runtime_data = BlinkData(
+        coordinator, listener, Clips(hass, blink, ffmpeg), LiveViews(hass, coordinator, ffmpeg)
+    )
+    entry.runtime_data.live.async_start()
+    async_register_views(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
@@ -49,5 +102,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: BlinkInstantConfigEntry
     """Stop the listener and unload platforms."""
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
-        await entry.runtime_data.async_stop()
+        await entry.runtime_data.live.async_stop_all()
+        await entry.runtime_data.listener.async_stop()
     return unloaded

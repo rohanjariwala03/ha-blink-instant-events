@@ -1,20 +1,22 @@
 # Blink Instant Events
 
-Instant Blink motion and doorbell-press events in Home Assistant.
+Blink cameras in Home Assistant with instant events: motion and doorbell presses arrive the moment
+Blink pushes them, plus arm/disarm, motion switches, battery and climate sensors, snapshots, clips,
+live view with two-way talk, and camera controls — one Blink sign-in, no add-on, no Docker.
 
 Home Assistant's Blink integrations poll Blink's cloud, so motion shows up minutes late and
 doorbell presses don't show up at all. The Blink phone app is instant because Blink pushes events
 through Firebase Cloud Messaging (FCM). This integration signs in to Blink as its own app client,
-registers an FCM token, and keeps a push connection open inside Home Assistant — no Docker, no
-polling, no clips required.
+registers an FCM token, and keeps a push connection open inside Home Assistant. The same session
+polls Blink every 5 minutes for everything else.
 
 > **Unofficial.** Not affiliated with Blink, Amazon, Google or Home Assistant. It relies on
 > reverse-engineered behaviour of the Blink app and can break whenever Blink changes it.
 
 ## Requirements
 
-- Home Assistant 2026.10 or newer
-- A Blink account (email + password + the PIN Blink texts/emails you)
+- Home Assistant 2026.10 or newer (its `ffmpeg`, used for live view and clip thumbnails, is built in)
+- A Blink account (email + password + the PIN Blink texts/emails you); one account per Home Assistant
 
 ## Install
 
@@ -26,13 +28,22 @@ polling, no clips required.
 
 ## What you get
 
+Per camera (`<camera>` = its name, e.g. `front_door`):
+
 | Entity | Description |
 | --- | --- |
-| `event.<camera>_blink_event` | One per camera. Event types: `motion` for every camera, `doorbell_press` for doorbells, and Blink's raw type (e.g. `camera_offline`) for anything else. |
-| `binary_sensor.blink_instant_events_push_connection` | Diagnostic: on while the push connection is up and registered with Blink. |
+| `event.<camera>_blink_event` | Instant events: `motion`, `doorbell_press` (doorbells), or Blink's raw type (e.g. `camera_offline`). |
+| `binary_sensor.<camera>_motion` | On for 30 s after each motion push. `last_record` attribute. |
+| `camera.<camera>` | Latest Blink snapshot. |
+| `camera.<camera>_live_view` | Live-view details for apps (the stream is the HTTP API below). |
+| `button.<camera>_refresh_snapshot` | Take a new snapshot (wakes the camera). |
+| `switch.<camera>_motion_detection` | The camera's motion detection. |
+| `binary_sensor.<camera>_battery`, `sensor.<camera>_battery_voltage`, `sensor.<camera>_temperature`, `sensor.<camera>_wifi_signal` | Battery and health, where the model reports them. |
 
-Event attributes: `camera`, `camera_id`, `network_id`, `blink_event_type`, plus `created_at`,
-`category` and any thumbnail/clip id Blink includes.
+Per Sync Module network: `alarm_control_panel.blink_<network>` (arm away/disarm) and
+`binary_sensor.blink_<network>_connection`. Account: `sensor.blink_instant_events_last_blink_refresh`
+(poll health, `state` = `ok`/`backoff`/`auth_failed`) and
+`binary_sensor.blink_instant_events_push_connection`.
 
 The automation editor offers device triggers **Motion detected** and **Doorbell pressed**.
 
@@ -55,35 +66,49 @@ actions:
 Motion pushes only arrive when the Blink app itself would notify you: the system is armed, the
 camera's motion detection is on, and notifications are enabled.
 
-## How it works
+**HTTP API** (for apps; HA bearer auth or a short-lived camera token): clips list and download,
+HLS live view, push-to-talk WebSocket, camera controls (night vision, flood light, volume) and the
+last live view as MP4. See [docs/app-api.md](docs/app-api.md). Moving from Blink Live View Proxy:
+[docs/migration.md](docs/migration.md).
 
-1. Registers an FCM identity in Blink's Firebase project with
-   [firebase-messaging](https://github.com/sdb9696/firebase-messaging).
-2. Signs in with [blinkpy](https://github.com/fronzbot/blinkpy) and attaches the FCM token to that
-   Blink session (`clients/{id}/update`), as the phone app does.
-3. Keeps the Google MCS connection open, reconnects with backoff, re-registers every 12 hours, and
-   acknowledges pushes that ask for a receipt.
+**Option:** *Take a snapshot after each motion* (Configure on the integration). Off by default.
 
-Protocol details: [docs/protocol.md](docs/protocol.md).
+## Battery
+
+Cameras are never woken on a timer. They wake for: live view (for as long as it runs; it stops on
+request or 15 s after the player stops asking), a snapshot you request, the optional snapshot after
+motion (at most once per camera every 5 minutes, about 30 s after the motion push), and camera
+control changes. Polling every 5 minutes reads Blink's cloud, not the cameras.
 
 ## Privacy
 
-Tokens are stored in the config entry and never logged. Diagnostics redact email, tokens, account
-and client ids, FCM credentials and serial numbers.
+Tokens are stored in the config entry and never logged; live-view tokens and stream addresses are
+not logged either. Diagnostics redact email, tokens, account and client ids, FCM credentials,
+serial numbers and media URLs. Clips and the last live view of each camera are kept under
+`.cache/blink_instant_events/` (clips capped at 256 MB, oldest first), which Home Assistant backups
+skip.
 
 ## Risks
 
-- Blink can change its push registration, app-version checks or Firebase project at any time.
+- Blink can change its push registration, app-version checks, live-view protocol or Firebase project
+  at any time; any of the features can stop working without notice.
+- Live view connects to Blink's stream server the way blinkpy does, without verifying its TLS
+  certificate.
+- Live view and snapshots cost camera battery.
 - This adds a signed-in client to your Blink account; Blink may email you about the new sign-in.
 - Automated access may conflict with Blink's terms of service. Use at your own risk.
 
 ## Credits
 
+- [Teethree89/ha-blink-live-view-proxy](https://github.com/Teethree89/ha-blink-live-view-proxy) (MIT) —
+  live view, talk, camera controls, clips and device-state code ported from it.
 - [CoreyHayward/ha-blink-live-events](https://github.com/CoreyHayward/ha-blink-live-events) (MIT) —
-  the protocol research this integration builds on.
+  the push protocol research this integration builds on.
+- [blinkpy](https://github.com/fronzbot/blinkpy) (MIT) — Blink sign-in, devices and livestream.
 - [firebase-messaging](https://github.com/sdb9696/firebase-messaging) (MIT) — FCM registration and
   MCS client, also used by Home Assistant's Ring integration.
-- [blinkpy](https://github.com/fronzbot/blinkpy) (MIT) — Blink sign-in.
+
+See [NOTICE](NOTICE). Protocol notes: [docs/protocol.md](docs/protocol.md).
 
 ## License
 

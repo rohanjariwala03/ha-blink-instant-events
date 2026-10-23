@@ -1,36 +1,22 @@
-"""Fixtures: a configured entry with Blink REST and FCM mocked out."""
+"""Fixtures: a configured entry with blinkpy, Blink REST and FCM mocked out."""
 
 from __future__ import annotations
 
 from collections.abc import Generator
 import time
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from blinkpy.camera import BlinkCamera
+from blinkpy.sync_module import BlinkSyncModule
 from firebase_messaging import FcmPushClientRunState
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from requests.structures import CaseInsensitiveDict
 
 from custom_components.blink_instant_events.const import CONF_AUTH, CONF_FCM, DOMAIN
 from homeassistant.core import HomeAssistant
 
-DEVICES = [
-    {
-        "id": "100001",
-        "name": "Backyard",
-        "serial": "G8T1-0001",
-        "type": "sedona",
-        "network_id": 200001,
-        "doorbell": False,
-    },
-    {
-        "id": "100002",
-        "name": "Front Door",
-        "serial": "G8T1-0002",
-        "type": "tulip",
-        "network_id": 200001,
-        "doorbell": True,
-    },
-]
 AUTH = {
     "username": "me@example.com",
     "token": "access-token",
@@ -75,19 +61,111 @@ def mock_fcm() -> Generator[MagicMock]:
 
 @pytest.fixture
 def mock_account() -> Generator[MagicMock]:
-    """Blink REST calls."""
+    """Push-client REST calls."""
     base = "custom_components.blink_instant_events.api.BlinkAccount"
     with (
-        patch(f"{base}.async_get_devices", AsyncMock(return_value=DEVICES)) as devices,
         patch(f"{base}.async_associate", AsyncMock()) as associate,
         patch(f"{base}.async_send_receipt", AsyncMock()) as receipt,
     ):
-        yield MagicMock(devices=devices, associate=associate, receipt=receipt)
+        yield MagicMock(associate=associate, receipt=receipt)
+
+
+def _camera(sync: MagicMock, **attrs: object) -> MagicMock:
+    cam = MagicMock(spec=BlinkCamera)
+    cam.sync = sync
+    cam.async_arm = AsyncMock(return_value={"id": 1})
+    cam.update = AsyncMock()
+    cam.snap_picture = AsyncMock(return_value={"id": 2})
+    cam.last_record = None
+    cam.version = "1.0"
+    cam._cached_image = cam.image_from_cache = b"jpeg-" + str(attrs["serial"]).encode()
+    cam.thumbnail = None
+    for key, value in attrs.items():
+        setattr(cam, key, value)
+    cam.attributes = {"name": attrs["name"], "serial": attrs["serial"], "thumbnail": "https://rest-u001/thumb?ts=1"}
+    return cam
+
+
+@pytest.fixture
+def mock_blink() -> Generator[MagicMock]:
+    """A blinkpy Blink with one sync module, an outdoor camera and a doorbell."""
+    blink = MagicMock()
+    blink.urls = None
+    blink.homescreen = {}
+    blink.setup_urls.side_effect = lambda: setattr(blink, "urls", SimpleNamespace(base_url="https://rest-u001"))
+    blink.setup_post_verify = AsyncMock(return_value=True)
+    blink.refresh = AsyncMock(return_value=True)
+    blink.get_homescreen = AsyncMock()
+
+    sync = MagicMock(spec=BlinkSyncModule)
+    sync.blink = blink
+    sync.name = "home"
+    sync.network_id = "200001"
+    sync.serial = "SYNC-0001"
+    sync.version = "4.0"
+    sync.status = "online"
+    sync.available = True
+    sync.local_storage = False
+    sync._local_storage = {"manifest": [], "last_manifest_id": None}
+    sync.network_info = {"network": {"armed": False}}
+    sync.attributes = {"name": "home", "serial": "SYNC-0001"}
+    sync.get_network_info = AsyncMock(return_value=True)
+    sync.get_camera_info = AsyncMock(return_value={"id": "100001"})
+    sync.get_unique_info.return_value = None
+
+    async def arm(value: bool) -> dict:
+        sync.network_info = {"network": {"armed": value}}
+        return {"id": 3, "network_id": 200001}
+
+    sync.async_arm = AsyncMock(side_effect=arm)
+    blink.sync = CaseInsensitiveDict({"home": sync})
+    blink.cameras = CaseInsensitiveDict(
+        {
+            "Backyard": _camera(
+                sync,
+                name="Backyard",
+                camera_id="100001",
+                serial="G8T1-0001",
+                network_id="200001",
+                camera_type="",
+                product_type="sedona",
+                temperature=70,
+                temperature_calibrated=68,
+                battery_state="ok",
+                battery_level=3,
+                battery_voltage=165,
+                wifi_strength=-55,
+                arm=True,
+            ),
+            "Front Door": _camera(
+                sync,
+                name="Front Door",
+                camera_id="100002",
+                serial="G8T1-0002",
+                network_id="200001",
+                camera_type="doorbell",
+                product_type="tulip",
+                temperature=None,
+                temperature_calibrated=None,
+                battery_state="low",
+                battery_level=None,
+                battery_voltage=None,
+                wifi_strength=4,
+                arm=False,
+            ),
+        }
+    )
+    with patch("custom_components.blink_instant_events.Blink", return_value=blink):
+        yield blink
 
 
 @pytest.fixture
 async def setup_entry(
-    hass: HomeAssistant, config_entry: MockConfigEntry, mock_fcm: MagicMock, mock_account: MagicMock
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_fcm: MagicMock,
+    mock_account: MagicMock,
+    mock_blink: MagicMock,
 ) -> MockConfigEntry:
     """Set up the integration."""
     config_entry.add_to_hass(hass)

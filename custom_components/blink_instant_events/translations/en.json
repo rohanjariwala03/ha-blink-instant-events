@@ -47,6 +47,25 @@
     "binary_sensor": {
       "push_connected": {
         "name": "Push connection"
+      },
+      "motion": {
+        "name": "Motion"
+      },
+      "battery": {
+        "name": "Battery"
+      },
+      "connection": {
+        "name": "Connection"
+      }
+    },
+    "button": {
+      "refresh_snapshot": {
+        "name": "Refresh snapshot"
+      }
+    },
+    "camera": {
+      "live_view": {
+        "name": "Live view"
       }
     },
     "event": {
@@ -59,6 +78,38 @@
               "doorbell_press": "Doorbell pressed"
             }
           }
+        }
+      }
+    },
+    "sensor": {
+      "temperature": {
+        "name": "Temperature"
+      },
+      "battery_voltage": {
+        "name": "Battery voltage"
+      },
+      "wifi_signal": {
+        "name": "WiFi signal"
+      },
+      "last_refresh": {
+        "name": "Last Blink refresh"
+      }
+    },
+    "switch": {
+      "motion_detection": {
+        "name": "Motion detection"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Blink Instant Events options",
+        "data": {
+          "snapshot_after_motion": "Take a snapshot after each motion"
+        },
+        "data_description": {
+          "snapshot_after_motion": "About 30 s after a motion push, ask the camera for a new picture (at most once per camera every 5 minutes). Each one wakes the camera, so it costs battery."
         }
       }
     }

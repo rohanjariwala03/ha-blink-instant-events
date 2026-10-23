@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
+from collections.abc import Callable
 from datetime import datetime, timedelta
 import json
 import logging
@@ -11,6 +12,7 @@ import time
 from typing import Any
 
 from aiohttp import ClientError
+from blinkpy.auth import UnauthorizedError
 from firebase_messaging import FcmPushClient, FcmPushClientRunState
 
 from homeassistant.config_entries import ConfigEntry
@@ -20,7 +22,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util, slugify
 
-from .api import BlinkAccount, BlinkAuthError
+from .api import BlinkAccount
 from .const import (
     CONF_FCM,
     DOORBELL_TYPES,
@@ -79,12 +81,14 @@ class BlinkPushListener:
         entry: ConfigEntry,
         account: BlinkAccount,
         devices: list[dict[str, Any]],
+        on_event: Callable[[str, str], None],
     ) -> None:
-        """Initialize."""
+        """Initialize; `on_event(camera_id, event_type)` runs after every matched push."""
         self.hass = hass
         self.entry = entry
         self.account = account
         self.devices = {dev["id"]: dev for dev in devices}
+        self._on_event = on_event
         self.last_event: dict[str, Any] | None = None
         self._client: FcmPushClient | None = None
         self._seen: deque[str] = deque(maxlen=200)
@@ -138,7 +142,7 @@ class BlinkPushListener:
                 elif time.monotonic() >= self._next_try:
                     await self._async_connect()
                     self._failures = 0
-            except BlinkAuthError:
+            except UnauthorizedError:
                 _LOGGER.warning("Blink session expired; sign in again")
                 self.entry.async_start_reauth(self.hass)
             except (ClientError, TimeoutError, RuntimeError) as err:
@@ -204,9 +208,10 @@ class BlinkPushListener:
             event_type,
             attributes,
         )
+        self._on_event(device["id"], event_type)
 
     async def _async_receipt(self, unique_id: str) -> None:
         try:
             await self.account.async_send_receipt(unique_id)
-        except (BlinkAuthError, ClientError, TimeoutError) as err:
+        except (UnauthorizedError, ClientError, TimeoutError) as err:
             _LOGGER.debug("Blink receipt failed: %s", type(err).__name__)

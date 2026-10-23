@@ -1,3 +1,6 @@
 pytest-homeassistant-custom-component==0.13.372
 blinkpy==0.25.9
 firebase-messaging==0.4.5
+ha-ffmpeg==3.2.2
+PyTurboJPEG==1.8.3
+imageio-ffmpeg==0.6.0

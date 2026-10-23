@@ -22,7 +22,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Add an event entity for every camera, doorbell and mini."""
-    async_add_entities(BlinkInstantEvent(entry, device) for device in entry.runtime_data.devices.values())
+    async_add_entities(BlinkInstantEvent(entry, device) for device in entry.runtime_data.listener.devices.values())
 
 
 class BlinkInstantEvent(EventEntity):

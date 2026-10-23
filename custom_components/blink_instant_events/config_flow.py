@@ -10,11 +10,12 @@ from aiohttp import ClientError
 from blinkpy.auth import Auth, BlinkTwoFARequiredError, LoginError, TokenRefreshFailed
 import voluptuous as vol
 
-from homeassistant.config_entries import SOURCE_REAUTH, ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, CONF_PIN
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_AUTH, DOMAIN
+from .const import CONF_AUTH, CONF_SNAPSHOT_AFTER_MOTION, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,6 +26,12 @@ class BlinkInstantEventsConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     _auth: Auth
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> BlinkOptionsFlow:
+        """Options: snapshot after motion."""
+        return BlinkOptionsFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Ask for the Blink email and password."""
@@ -94,3 +101,23 @@ class BlinkInstantEventsConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_update_reload_and_abort(self._get_reauth_entry(), data_updates={CONF_AUTH: auth})
         self._abort_if_unique_id_configured()
         return self.async_create_entry(title=auth["username"], data={CONF_AUTH: auth})
+
+
+class BlinkOptionsFlow(OptionsFlow):
+    """Snapshot after motion costs battery, so it is off until you turn it on."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """One switch."""
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_SNAPSHOT_AFTER_MOTION,
+                        default=self.config_entry.options.get(CONF_SNAPSHOT_AFTER_MOTION, False),
+                    ): bool
+                }
+            ),
+        )

@@ -42,7 +42,7 @@ def test_classify() -> None:
 
 async def test_doorbell_and_motion(hass: HomeAssistant, setup_entry, mock_account: MagicMock) -> None:
     """Doorbell press by camera id, motion by camera name, both with attributes."""
-    listener = setup_entry.runtime_data
+    listener = setup_entry.runtime_data.listener
     door = entity_id(hass, "G8T1-0002")
     listener._on_push(push(event_type="button_press", camera_id=100002, unique_id="u1", return_receipt="true"), "p1")
     await hass.async_block_till_done()
@@ -63,7 +63,7 @@ async def test_doorbell_and_motion(hass: HomeAssistant, setup_entry, mock_accoun
 
 async def test_duplicate_stale_unknown_ignored(hass: HomeAssistant, setup_entry) -> None:
     """Same unique_id twice, old pushes and unknown cameras don't fire."""
-    listener = setup_entry.runtime_data
+    listener = setup_entry.runtime_data.listener
     door = entity_id(hass, "G8T1-0002")
     listener._on_push(push(event_type="button_press", camera_id=100002, unique_id="u1"), "p1")
     await hass.async_block_till_done()
@@ -79,7 +79,7 @@ async def test_duplicate_stale_unknown_ignored(hass: HomeAssistant, setup_entry)
 
 async def test_raw_event_type(hass: HomeAssistant, setup_entry) -> None:
     """Unknown Blink types are exposed under their raw name."""
-    listener = setup_entry.runtime_data
+    listener = setup_entry.runtime_data.listener
     listener._on_push(push(event_type="camera_offline", camera_id=100001), "p1")
     await hass.async_block_till_done()
     state = hass.states.get(entity_id(hass, "G8T1-0001"))
@@ -101,7 +101,7 @@ async def test_device_triggers(hass: HomeAssistant, setup_entry) -> None:
         automation.DOMAIN,
         {automation.DOMAIN: {"trigger": press, "action": {"action": "test.record"}}},
     )
-    listener = setup_entry.runtime_data
+    listener = setup_entry.runtime_data.listener
     listener._on_push(push(event_type="pir", camera_id=100002), "p1")
     await hass.async_block_till_done()
     assert not calls
