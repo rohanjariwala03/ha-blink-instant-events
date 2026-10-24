@@ -6,6 +6,7 @@ import asyncio
 import base64
 from collections.abc import Callable
 import hashlib
+import logging
 import secrets
 import time
 from typing import Any
@@ -17,6 +18,8 @@ from blinkpy.auth import Auth, UnauthorizedError
 from blinkpy.helpers.constants import OAUTH_SCOPE, OAUTH_TOKEN_URL, OAUTH_TOKEN_USER_AGENT, OAUTH_V2_CLIENT_ID
 
 from .const import APP_VERSION, CLIENT_NAME
+
+_LOGGER = logging.getLogger(__name__)
 
 TIMEOUT = ClientTimeout(total=20)
 
@@ -77,6 +80,14 @@ async def _token(session: ClientSession, form: dict[str, str]) -> dict[str, Any]
         OAUTH_TOKEN_URL, data=form, headers={"User-Agent": USER_AGENT, "Accept": "application/json"}, timeout=TIMEOUT
     ) as resp:
         if resp.status in (400, 401):
+            # Blink's reason ("invalid_grant", ...) carries no secrets, and tells expiry from a refusal.
+            reason = await resp.json(content_type=None) if resp.content_type == "application/json" else {}
+            _LOGGER.warning(
+                "Blink refused the %s grant: %s %s",
+                form["grant_type"],
+                reason.get("error"),
+                reason.get("error_description"),
+            )
             raise UnauthorizedError
         resp.raise_for_status()
         data = await resp.json(content_type=None)
@@ -97,6 +108,10 @@ async def async_push_sign_in(session: ClientSession, code: str, pending: dict[st
             "code": code,
             "code_verifier": pending["verifier"],
             "client_id": ANDROID_CLIENT,
+            # The code is bound to the device that asked for it, as in blinkpy's iOS exchange.
+            "hardware_id": pending["hardware_id"],
+            "scope": "client",
+            "app_brand": "blink",
         },
     )
     headers = {"Authorization": f"Bearer {auth['token']}", "User-Agent": USER_AGENT}
@@ -156,6 +171,7 @@ class PushAuth:
                             "refresh_token": self.data["refresh_token"],
                             "client_id": ANDROID_CLIENT,
                             "scope": "client",
+                            "hardware_id": self.data["hardware_id"],
                         },
                     ),
                 }
