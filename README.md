@@ -1,3 +1,5 @@
+<img src="custom_components/blink_instant_events/brand/icon@2x.png" alt="" width="112" align="right">
+
 # Blink Instant Events
 
 Blink cameras in Home Assistant with instant events: motion and doorbell presses arrive the moment
