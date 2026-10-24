@@ -16,7 +16,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import REDIRECT_URI, async_push_sign_in, callback_code, sign_in_request
-from .const import CONF_AUTH, CONF_PUSH_AUTH, CONF_SNAPSHOT_AFTER_MOTION, CONF_VISION_URL, DOMAIN
+from .const import CONF_AUTH, CONF_LIVE_LOOK, CONF_PUSH_AUTH, CONF_SNAPSHOT_AFTER_MOTION, CONF_VISION_URL, DOMAIN
 
 CONF_CALLBACK_URL = "callback_url"
 
@@ -127,6 +127,7 @@ class BlinkOptionsFlow(OptionsFlow):
                     vol.Required(
                         CONF_SNAPSHOT_AFTER_MOTION, default=options.get(CONF_SNAPSHOT_AFTER_MOTION, False)
                     ): bool,
+                    vol.Required(CONF_LIVE_LOOK, default=options.get(CONF_LIVE_LOOK, False)): bool,
                     vol.Optional(
                         CONF_VISION_URL, description={"suggested_value": options.get(CONF_VISION_URL)}
                     ): vol.All(str, vol.Match(r"^https?://\S+$")),

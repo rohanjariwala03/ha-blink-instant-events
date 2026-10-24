@@ -91,6 +91,12 @@ SFace (faces) and YOLOX-S (people, vehicles, animals) from the OpenCV Model Zoo.
 your network. A push starts looking for the clip at once (Blink usually lists it 15–40 s after the
 motion); without pushes, the next poll that lists a new clip does.
 
+**No Blink subscription (no clips)?** Turn on **Configure → Settings → Look with live view after
+motion**. Each motion or doorbell push then opens 8 seconds of live view, and Blink Vision reads
+that instead. It starts about 5 seconds after the motion, so someone passing quickly can be gone.
+Each look wakes the camera, much like recording a clip. It's skipped while someone is already
+watching that camera.
+
 - `event.<camera>_blink_event` fires `detection` with `summary` ("Rohan and an unknown person",
   "A vehicle", …), `people`, `unknown_faces`, `labels` (`person`/`vehicle`/`animal`), `known_only`
   (only faces you taught it) and `image`, a signed link to the frame with boxes drawn (for

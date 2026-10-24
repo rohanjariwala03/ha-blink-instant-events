@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta
+import hashlib
 import io
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aiohttp import ClientError, ClientTimeout
 from blinkpy.camera import BlinkCamera
@@ -29,8 +30,20 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util, slugify
 
 from .clips import Clips, clip_id
-from .const import BLINK_ERRORS, CONF_VISION_URL, DOMAIN, EVENT_DETECTION, SIGNAL_DETECTION, SIGNAL_EVENT
+from .const import (
+    BLINK_ERRORS,
+    CONF_LIVE_LOOK,
+    CONF_VISION_URL,
+    DOMAIN,
+    EVENT_DETECTION,
+    SIGNAL_DETECTION,
+    SIGNAL_EVENT,
+)
 from .coordinator import BlinkCoordinator
+from .entity import camera_slug
+
+if TYPE_CHECKING:
+    from .liveview import LiveViews
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,6 +55,7 @@ FRAMES = 10  # one a second from the start of the clip
 WAIT_FOR_CLIP = (10, 10, 10, 15, 15, 20, 30, 40)  # after a push: ~2.5 min of looking, most often found by ~30 s
 KEEP = timedelta(days=7)
 KEEP_ROWS = 1000
+LOOK_SECONDS = 8  # of live view after a push, when there are no clips to read
 BACKFILL = timedelta(minutes=15)  # clips older than this at startup are not analyzed
 PROBE_INTERVAL = timedelta(minutes=10)
 IMAGE_TTL = timedelta(days=2)  # how long the signed image link in an event works
@@ -132,6 +146,7 @@ class Vision:
         self.clips = clips
         self.ffmpeg = ffmpeg
         self.url: str | None = None
+        self.live: LiveViews | None = None  # set once live view is set up; used when there are no clips
         self.rows: dict[str, dict[str, Any]] = {}  # clip id -> detection
         self.root = clips.root.parent / "detections"
         self._store: Store[list[dict[str, Any]]] = Store(hass, 1, f"{DOMAIN}.detections")
@@ -204,6 +219,9 @@ class Vision:
 
     async def _watch(self, camera: BlinkCamera) -> None:
         try:
+            if self.entry.options.get(CONF_LIVE_LOOK):
+                await self._look(camera)
+                return
             for delay in WAIT_FOR_CLIP:
                 await asyncio.sleep(delay)
                 if await self.async_scan(camera.name):
@@ -249,9 +267,38 @@ class Vision:
                     _LOGGER.warning("Could not analyze the %s clip from %s: %s", camera_name, clip["created_at"], err)
             return len(new)
 
+    async def _look(self, camera: BlinkCamera) -> None:
+        """No clips without a Blink subscription: watch a few seconds of live view and read that instead."""
+        slug = camera_slug(camera)
+        if self.live is None or slug in self.live.sessions:
+            return  # someone is already watching it
+        created = dt_util.utcnow()
+        try:
+            session = await self.live.get_or_start(slug, "")
+            try:
+                await session.wait_ready()
+                await asyncio.sleep(LOOK_SECONDS)
+            finally:
+                # A viewer who joined meanwhile keeps the session; their live view isn't ours to end or read.
+                mine = self.live.sessions.get(slug) is session and not any(
+                    viewer.startswith(f"{slug}:") for viewer in self.live.viewers
+                )
+                if mine:
+                    await self.live.async_stop(slug)
+            if not mine or (path := await self.live.last_liveview_mp4(slug)) is None:
+                return
+            key = hashlib.sha256(f"live|{slug}|{created.isoformat()}".encode()).hexdigest()[:24]
+            async with self._lock:
+                await self._analyze_file(key, path, camera.name, slug, created)
+        except (*BLINK_ERRORS, LookupError) as err:
+            _LOGGER.warning("Could not look at %s with live view: %s", camera.name, err)
+
     async def _analyze(self, clip: dict[str, Any]) -> None:
         key = clip_id(clip)
         path = await self.clips.async_clip(key, clip)
+        await self._analyze_file(key, path, clip["camera_name"], clip["slug"], clip["created_at"])
+
+    async def _analyze_file(self, key: str, path: Path, camera_name: str, slug: str, created: datetime) -> None:
         jpegs = split_jpegs(await self._frames(path))
         if not jpegs or self.url is None:
             raise RuntimeError("no frames" if not jpegs else "Blink Vision went away")
@@ -266,9 +313,9 @@ class Vision:
         await self.hass.async_add_executor_job(self._save_image, key, image)
         row = {
             "id": key,
-            "camera": clip["camera_name"],
-            "slug": clip["slug"],
-            "created_at": clip["created_at"].isoformat(),
+            "camera": camera_name,
+            "slug": slug,
+            "created_at": created.isoformat(),
             "analyzed_at": dt_util.utcnow().isoformat(),
             **summarize(frames),
         }

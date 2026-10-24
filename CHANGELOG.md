@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Smart detection without a Blink subscription**: option **Look with live view after motion**
+  reads 8 seconds of live view after each push when there are no clips.
 - Push events carry Blink's own `detection_type`, `detections`, `title` and `message` when Blink sends
   them.
 - **Pushes now arrive.** Blink sends pushes only to clients of its Android app, and the push token
