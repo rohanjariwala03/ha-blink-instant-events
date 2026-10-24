@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from aiohttp import ClientError
-from blinkpy.auth import Auth, BlinkTwoFARequiredError, LoginError, TokenRefreshFailed
+from blinkpy.auth import Auth, BlinkTwoFARequiredError, LoginError, TokenRefreshFailed, UnauthorizedError
 import voluptuous as vol
 
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
@@ -15,7 +15,10 @@ from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, CONF_PIN
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_AUTH, CONF_SNAPSHOT_AFTER_MOTION, CONF_VISION_URL, DOMAIN
+from .api import REDIRECT_URI, async_push_sign_in, callback_code, sign_in_request
+from .const import CONF_AUTH, CONF_PUSH_AUTH, CONF_SNAPSHOT_AFTER_MOTION, CONF_VISION_URL, DOMAIN
+
+CONF_CALLBACK_URL = "callback_url"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +33,7 @@ class BlinkInstantEventsConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> BlinkOptionsFlow:
-        """Options: snapshot after motion."""
+        """Options: settings and the push sign-in."""
         return BlinkOptionsFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -104,15 +107,21 @@ class BlinkInstantEventsConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class BlinkOptionsFlow(OptionsFlow):
-    """Snapshot after motion costs battery, so it is off until you turn it on. Blink Vision is found by itself."""
+    """Settings, and the Android sign-in that instant events need."""
+
+    _sign_in: tuple[str, dict[str, str]]
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """A switch, and where Blink Vision runs if it isn't the add-on."""
+        """Pick what to change."""
+        return self.async_show_menu(step_id="init", menu_options=["push_sign_in", "settings"])
+
+    async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Snapshot after motion costs battery, so it is off until you turn it on. Blink Vision is found by itself."""
         if user_input is not None:
             return self.async_create_entry(data=user_input)
         options = self.config_entry.options
         return self.async_show_form(
-            step_id="init",
+            step_id="settings",
             data_schema=vol.Schema(
                 {
                     vol.Required(
@@ -123,4 +132,38 @@ class BlinkOptionsFlow(OptionsFlow):
                     ): vol.All(str, vol.Match(r"^https?://\S+$")),
                 }
             ),
+        )
+
+    async def async_step_push_sign_in(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Blink's own sign-in page as the Android app; paste back the address it ends on."""
+        errors: dict[str, str] = {}
+        if user_input is None or not hasattr(self, "_sign_in"):
+            self._sign_in = sign_in_request()
+        else:
+            url, pending = self._sign_in
+            if (code := callback_code(user_input[CONF_CALLBACK_URL], pending["state"])) is None:
+                errors["base"] = "bad_callback"
+            else:
+                try:
+                    push_auth = await async_push_sign_in(async_get_clientsession(self.hass), code, pending)
+                except UnauthorizedError:
+                    errors["base"] = "sign_in_expired"
+                except (ClientError, TimeoutError, KeyError):
+                    errors["base"] = "cannot_connect"
+                else:
+                    if str(push_auth["account_id"]) != self.config_entry.unique_id:
+                        errors["base"] = "wrong_account"
+                    else:
+                        self.hass.config_entries.async_update_entry(
+                            self.config_entry, data={**self.config_entry.data, CONF_PUSH_AUTH: push_auth}
+                        )
+                        self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
+                        return self.async_create_entry(data=dict(self.config_entry.options))
+            if errors.get("base") == "sign_in_expired":
+                self._sign_in = sign_in_request()  # a code works once; start over with a fresh page
+        return self.async_show_form(
+            step_id="push_sign_in",
+            data_schema=vol.Schema({vol.Required(CONF_CALLBACK_URL): str}),
+            description_placeholders={"url": self._sign_in[0], "callback": REDIRECT_URI},
+            errors=errors,
         )

@@ -27,6 +27,11 @@ polls Blink every 5 minutes for everything else.
 3. **Settings → Devices & services → Add integration → Blink Instant Events**.
 4. Enter your Blink email and password, then the PIN Blink sends. The password is used once and
    not stored; if Blink later revokes the session, Home Assistant asks you to sign in again.
+5. For instant events: the integration's **Configure → Sign in for instant events**. Blink pushes
+   only to its Android app, so this signs in once more, as that app. Use Blink's own page, on a
+   computer rather than a phone with the Blink app. When the sign-in finishes, paste the address
+   it ends on (`https://applinks.blink.com/signin/callback?…`) into the form. Until you do this,
+   a repair reminds you, and motion only shows up from polling.
 
 ## What you get
 

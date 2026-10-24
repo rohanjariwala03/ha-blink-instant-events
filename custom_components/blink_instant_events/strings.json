@@ -135,7 +135,21 @@
   "options": {
     "step": {
       "init": {
-        "title": "Blink Instant Events options",
+        "title": "Blink Instant Events",
+        "menu_options": {
+          "push_sign_in": "Sign in for instant events",
+          "settings": "Settings"
+        }
+      },
+      "push_sign_in": {
+        "title": "Sign in for instant events",
+        "description": "Blink only sends instant events to its Android app, so Home Assistant signs in once more, as that app.\n\n1. Open [Blink's sign-in page]({url}) on a computer. Don't use a phone that has the Blink app, because the app would take over the sign-in.\n2. Sign in with the same Blink account and enter the code Blink sends you.\n3. Blink then goes to a page whose address starts with `{callback}`. The page itself may be blank or show an error. Copy the whole address from the address bar and paste it below.",
+        "data": {
+          "callback_url": "Address Blink ended on"
+        }
+      },
+      "settings": {
+        "title": "Settings",
         "data": {
           "snapshot_after_motion": "Take a snapshot after each motion",
           "vision_url": "Blink Vision URL"
@@ -145,6 +159,12 @@
           "vision_url": "Leave empty to use the Blink Vision add-on. Set it only if Blink Vision runs somewhere else, e.g. http://192.168.1.20:8000."
         }
       }
+    },
+    "error": {
+      "bad_callback": "That isn't the address Blink ended on. It starts with {callback}. Copy it from the same sign-in page this form showed.",
+      "sign_in_expired": "Blink didn't accept that sign-in; it may have expired. Open the new link and sign in again.",
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "wrong_account": "Sign in with the same Blink account as before."
     }
   },
   "services": {
@@ -169,6 +189,12 @@
           "description": "Do nothing when the TV is off, instead of turning it on."
         }
       }
+    }
+  },
+  "issues": {
+    "push_sign_in": {
+      "title": "Instant Blink events need one more sign-in",
+      "description": "Blink sends motion and doorbell pushes only to its Android app. For {account}, go to Settings › Devices & services › Blink Instant Events › Configure › Sign in for instant events. Until then, motion shows up from polling, every 5 minutes, and doorbell presses don't show up."
     }
   }
 }

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Pushes now arrive.** Blink sends pushes only to clients of its Android app, and the push token
+  had been registered on blinkpy's iOS-client session, so no push ever came. Pushes now use an
+  Android-client session of their own, set up with **Configure → Sign in for instant events**. A
+  repair asks for it until it's done; when it expires, the repair returns (it no longer asks you
+  to sign in to the whole integration again).
+- `cv_motion` pushes (Outdoor 4) count as motion.
 - An icon: Home Assistant shows it for the integration (from `brand/`), and the add-on store for
   Blink Vision.
 - Smart detection with the new **Blink Vision** add-on (in this repository): each new clip is

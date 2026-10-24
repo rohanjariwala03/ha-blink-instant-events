@@ -33,7 +33,7 @@ def entity_id(hass: HomeAssistant, serial: str) -> str:
 def test_classify() -> None:
     """Blink event types map to HA event types."""
     assert classify({"event_type": "button_press"}) == "doorbell_press"
-    for raw in ("cloud_motion", "cam2sm_motion", "pir"):
+    for raw in ("cloud_motion", "cam2sm_motion", "pir", "cv_motion"):
         assert classify({"event_type": raw}) == "motion"
     assert classify({"event_type": "Low Battery"}) == "low_battery"
     assert classify({}) is None
