@@ -1,5 +1,5 @@
 name: Blink Vision
-version: 0.1.0
+version: 0.1.1
 slug: blink_vision
 description: Local face recognition and person, vehicle and animal detection for Blink Instant Events
 url: https://github.com/rohanjariwala03/ha-blink-instant-events/tree/main/blink_vision
