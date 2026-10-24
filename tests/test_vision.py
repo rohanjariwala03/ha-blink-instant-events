@@ -202,6 +202,16 @@ async def test_live_look(
         live.async_stop.assert_not_awaited()
         assert len(vision.rows) == 1
 
+        # Nobody in view by the time it looked.
+        aioclient_mock.clear_requests()
+        aioclient_mock.get(f"{VISION}/health", json={"ok": True})
+        aioclient_mock.post(f"{VISION}/analyze", json={"faces": [], "objects": []})
+        live.viewers.clear()
+        live.get_or_start = AsyncMock(side_effect=start)
+        config_entry.runtime_data.listener._on_push({"data": json.dumps(body | {"unique_id": "x3"})}, "p3")
+        await hass.async_block_till_done(wait_background_tasks=True)
+        assert hass.states.get("event.backyard_blink_event").attributes["summary"] == "Gone before the camera looked"
+
 
 async def test_people_api(
     hass: HomeAssistant,
