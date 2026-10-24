@@ -8,12 +8,13 @@ from blinkpy.auth import BlinkTwoFARequiredError, LoginError
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.blink_instant_events.const import CONF_AUTH, CONF_FCM, DOMAIN
+from custom_components.blink_instant_events.api import ANDROID_CLIENT, callback_code, sign_in_request
+from custom_components.blink_instant_events.const import CONF_AUTH, CONF_FCM, CONF_PUSH_AUTH, DOMAIN
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
-from .conftest import AUTH
+from .conftest import AUTH, FCM
 
 
 @pytest.fixture
@@ -81,3 +82,49 @@ async def test_reauth_keeps_fcm(hass: HomeAssistant, mock_auth: MagicMock) -> No
     assert result["reason"] == "reauth_successful"
     assert entry.data[CONF_FCM] == {"keep": True}
     assert entry.data[CONF_AUTH]["token"] == AUTH["token"]
+
+
+def test_callback_code() -> None:
+    """Only the redirect for this sign-in's state yields a code."""
+    url, pending = sign_in_request()
+    assert f"client_id={ANDROID_CLIENT}" in url and pending["state"] in url
+    good = f"https://applinks.blink.com/signin/callback?code=abc&state={pending['state']}"
+    assert callback_code(f"  {good}\n", pending["state"]) == "abc"
+    assert callback_code(good.replace("state=", "state=x"), pending["state"]) is None
+    assert callback_code(good.replace("applinks.blink.com", "evil.example"), pending["state"]) is None
+    assert (
+        callback_code(
+            f"https://applinks.blink.com/signin/callback?error=denied&state={pending['state']}", pending["state"]
+        )
+        is None
+    )
+
+
+async def test_push_sign_in(hass: HomeAssistant) -> None:
+    """Options › Sign in for instant events stores the Android session and reloads."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="me@example.com", unique_id="99", data={CONF_AUTH: AUTH, CONF_FCM: FCM}
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.MENU
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "push_sign_in"})
+    url = result["description_placeholders"]["url"]
+    state = url.split("state=")[1].split("&")[0]
+
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {"callback_url": "https://x"})
+    assert result["errors"] == {"base": "bad_callback"}
+
+    push = {"token": "t", "refresh_token": "r", "expiration_date": 1, "account_id": 98, "client_id": "1"}
+    signed_in = AsyncMock(return_value=push)
+    callback = f"https://applinks.blink.com/signin/callback?code=c&state={state}"
+    with patch("custom_components.blink_instant_events.config_flow.async_push_sign_in", signed_in):
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {"callback_url": callback})
+        assert result["errors"] == {"base": "wrong_account"}
+        push["account_id"] = 99
+        with patch.object(hass.config_entries, "async_schedule_reload") as reload:
+            result = await hass.config_entries.options.async_configure(result["flow_id"], {"callback_url": callback})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert signed_in.await_args.args[1] == "c"
+    assert entry.data[CONF_PUSH_AUTH] == push
+    reload.assert_called_once_with(entry.entry_id)

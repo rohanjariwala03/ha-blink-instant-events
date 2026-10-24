@@ -17,6 +17,7 @@ from firebase_messaging import FcmPushClient, FcmPushClientRunState
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
@@ -25,6 +26,7 @@ from homeassistant.util import dt as dt_util, slugify
 from .api import BlinkAccount
 from .const import (
     CONF_FCM,
+    DOMAIN,
     DOORBELL_TYPES,
     EVENT_DOORBELL,
     EVENT_MOTION,
@@ -70,6 +72,20 @@ def classify(payload: dict[str, Any]) -> str | None:
     if raw in MOTION_TYPES:
         return EVENT_MOTION
     return slugify(raw) or None
+
+
+@callback
+def ask_push_sign_in(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """A repair: pushes need the Android sign-in in the integration's options."""
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        f"push_sign_in_{entry.entry_id}",
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="push_sign_in",
+        translation_placeholders={"account": entry.title},
+    )
 
 
 class BlinkPushListener:
@@ -147,8 +163,8 @@ class BlinkPushListener:
                     await self._async_connect()
                 self._failures = 0
             except UnauthorizedError:
-                _LOGGER.warning("Blink session expired; sign in again")
-                self.entry.async_start_reauth(self.hass)
+                _LOGGER.warning("Blink push session expired; sign in for instant events again")
+                ask_push_sign_in(self.hass, self.entry)
             except (ClientError, TimeoutError, RuntimeError) as err:
                 self._failures += 1
                 delay = min(60 * 2**self._failures, MAX_BACKOFF_SECONDS)

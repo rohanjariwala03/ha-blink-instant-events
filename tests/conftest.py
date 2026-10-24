@@ -14,7 +14,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from requests.structures import CaseInsensitiveDict
 
-from custom_components.blink_instant_events.const import CONF_AUTH, CONF_FCM, DOMAIN
+from custom_components.blink_instant_events.const import CONF_AUTH, CONF_FCM, CONF_PUSH_AUTH, DOMAIN
 from homeassistant.core import HomeAssistant
 
 AUTH = {
@@ -25,6 +25,15 @@ AUTH = {
     "hardware_id": "8D6F3F3E-0000-4000-8000-000000000000",
     "region_id": "u001",
     "account_id": 99,
+}
+PUSH_AUTH = {
+    "token": "push-token",
+    "refresh_token": "push-refresh",
+    "expiration_date": time.time() + 3600,
+    "hardware_id": "8D6F3F3E-0000-4000-8000-000000000001",
+    "region_id": "u001",
+    "account_id": 99,
+    "client_id": "456",
 }
 FCM = {"fcm": {"registration": {"token": "fcm-token"}}, "gcm": {"android_id": "1", "security_token": "2"}}
 
@@ -41,7 +50,7 @@ def config_entry() -> MockConfigEntry:
         domain=DOMAIN,
         title="me@example.com",
         unique_id="99",
-        data={CONF_AUTH: AUTH, CONF_FCM: FCM},
+        data={CONF_AUTH: AUTH, CONF_FCM: FCM, CONF_PUSH_AUTH: PUSH_AUTH},
     )
 
 
