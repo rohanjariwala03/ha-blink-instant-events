@@ -16,7 +16,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed, async_mock_service
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.blink_instant_events.const import CONF_VISION_URL
+from custom_components.blink_instant_events.const import CONF_LIVE_LOOK, CONF_VISION_URL
 from custom_components.blink_instant_events.vision import best_frame, split_jpegs, summarize
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -152,6 +152,55 @@ async def test_detection_end_to_end(
         data.listener._on_push({"data": json.dumps(body | {"unique_id": "x2"})}, "p2")
         await hass.async_block_till_done(wait_background_tasks=True)
         assert aioclient_mock.call_count == calls
+
+
+async def test_live_look(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_fcm: MagicMock,
+    mock_account: MagicMock,
+    mock_blink: MagicMock,
+    aioclient_mock: AiohttpClientMocker,
+    clip_file: Path,
+) -> None:
+    """No clips: a push opens live view, reads its video, and leaves a viewer's session alone."""
+    aioclient_mock.get(f"{VISION}/health", json={"ok": True})
+    aioclient_mock.post(
+        f"{VISION}/analyze",
+        json={"faces": [], "objects": [{"label": "car", "group": "vehicle", "box": [20, 20, 200, 100]}]},
+    )
+    config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(config_entry, options={CONF_VISION_URL: VISION, CONF_LIVE_LOOK: True})
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    vision = config_entry.runtime_data.vision
+    vision.ffmpeg = FFMPEG
+    live = vision.live = MagicMock(sessions={}, viewers={})
+    session = MagicMock(wait_ready=AsyncMock())
+
+    async def start(slug: str, viewer: str) -> MagicMock:
+        live.sessions[slug] = session
+        return session
+
+    live.get_or_start = AsyncMock(side_effect=start)
+    live.async_stop = AsyncMock(side_effect=lambda slug: live.sessions.pop(slug))
+    live.last_liveview_mp4 = AsyncMock(return_value=clip_file)
+    body = {"created_at": dt_util.utcnow().isoformat(), "event_type": "pir", "camera_id": 100001}
+    with patch("custom_components.blink_instant_events.vision.LOOK_SECONDS", 0):
+        config_entry.runtime_data.listener._on_push({"data": json.dumps(body)}, "p1")
+        await hass.async_block_till_done(wait_background_tasks=True)
+        live.async_stop.assert_awaited_once_with("backyard")
+        assert hass.states.get("event.backyard_blink_event").attributes["summary"] == "A vehicle"
+
+        # Someone opened the camera during the look: their session stays up and isn't read.
+        live.get_or_start = AsyncMock(
+            side_effect=lambda slug, viewer: live.viewers.update({f"{slug}:app": 1}) or session
+        )
+        live.async_stop.reset_mock()
+        config_entry.runtime_data.listener._on_push({"data": json.dumps(body | {"unique_id": "x2"})}, "p2")
+        await hass.async_block_till_done(wait_background_tasks=True)
+        live.async_stop.assert_not_awaited()
+        assert len(vision.rows) == 1
 
 
 async def test_people_api(
