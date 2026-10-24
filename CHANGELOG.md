@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Blink Vision 0.1.1: stops cleanly (it ignored SIGTERM as PID 1, so a stop ended in "error").
 - **Smart detection without a Blink subscription**: option **Look with live view after motion**
   reads 8 seconds of live view after each push when there are no clips. A look that sees nobody
   says "Gone before the camera looked" rather than "Nothing found".

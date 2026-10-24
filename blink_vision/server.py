@@ -19,6 +19,8 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
+import sys
 import threading
 import time
 from urllib.parse import unquote
@@ -241,4 +243,6 @@ if __name__ == "__main__":
     PEOPLE.mkdir(parents=True, exist_ok=True)
     load_people()
     print(f"Blink Vision listening on :{PORT}, knows {len(known)} people", flush=True)
+    # As PID 1, Python ignores SIGTERM; without this, Docker kills the add-on and the Supervisor shows an error.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
