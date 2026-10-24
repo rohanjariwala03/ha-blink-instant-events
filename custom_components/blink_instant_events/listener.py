@@ -46,6 +46,8 @@ NESTED_KEYS = ("data", "payload", "message", "notification")
 ID_KEYS = ("camera_id", "doorbell_id", "owl_id", "device_id", "camera")
 NAME_KEYS = ("camera_name", "device_name", "camera")
 ATTR_KEYS = ("network_id", "created_at", "category", "media_id", "clip_id", "video_id", "thumbnail")
+# What Blink's own detection says ("person", ...) and the notification text the Blink app shows.
+DETECTION_KEYS = ("detection_type", "detections", "title", "message")
 DEAD_STATES = {FcmPushClientRunState.STOPPING, FcmPushClientRunState.STOPPED}
 
 
@@ -222,6 +224,7 @@ class BlinkPushListener:
             "blink_event_type": payload.get("event_type"),
         }
         attributes |= {key: payload[key] for key in ATTR_KEYS if isinstance(payload.get(key), (str, int, float))}
+        attributes |= {key: payload[key] for key in DETECTION_KEYS if payload.get(key) not in (None, "")}
         async_dispatcher_send(
             self.hass,
             SIGNAL_EVENT.format(self.entry.entry_id, device["id"]),
