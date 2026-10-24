@@ -55,7 +55,8 @@ FRAMES = 10  # one a second from the start of the clip
 WAIT_FOR_CLIP = (10, 10, 10, 15, 15, 20, 30, 40)  # after a push: ~2.5 min of looking, most often found by ~30 s
 KEEP = timedelta(days=7)
 KEEP_ROWS = 1000
-LOOK_SECONDS = 8  # of live view after a push, when there are no clips to read
+LOOK_SECONDS = 8
+GONE = "Gone before the camera looked"  # of live view after a push, when there are no clips to read
 BACKFILL = timedelta(minutes=15)  # clips older than this at startup are not analyzed
 PROBE_INTERVAL = timedelta(minutes=10)
 IMAGE_TTL = timedelta(days=2)  # how long the signed image link in an event works
@@ -289,7 +290,7 @@ class Vision:
                 return
             key = hashlib.sha256(f"live|{slug}|{created.isoformat()}".encode()).hexdigest()[:24]
             async with self._lock:
-                await self._analyze_file(key, path, camera.name, slug, created)
+                await self._analyze_file(key, path, camera.name, slug, created, live=True)
         except (*BLINK_ERRORS, LookupError) as err:
             _LOGGER.warning("Could not look at %s with live view: %s", camera.name, err)
 
@@ -298,7 +299,9 @@ class Vision:
         path = await self.clips.async_clip(key, clip)
         await self._analyze_file(key, path, clip["camera_name"], clip["slug"], clip["created_at"])
 
-    async def _analyze_file(self, key: str, path: Path, camera_name: str, slug: str, created: datetime) -> None:
+    async def _analyze_file(
+        self, key: str, path: Path, camera_name: str, slug: str, created: datetime, live: bool = False
+    ) -> None:
         jpegs = split_jpegs(await self._frames(path))
         if not jpegs or self.url is None:
             raise RuntimeError("no frames" if not jpegs else "Blink Vision went away")
@@ -319,6 +322,8 @@ class Vision:
             "analyzed_at": dt_util.utcnow().isoformat(),
             **summarize(frames),
         }
+        if live and not row["labels"]:
+            row["summary"] = GONE  # a clip shows the motion itself; a look starts seconds after it
         self.rows[key] = row
         self._prune()
         self._store.async_delay_save(lambda: list(self.rows.values()), 5)
