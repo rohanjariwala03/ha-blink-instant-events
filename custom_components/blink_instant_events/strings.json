@@ -143,7 +143,7 @@
       },
       "push_sign_in": {
         "title": "Sign in for instant events",
-        "description": "Blink only sends instant events to its Android app, so Home Assistant signs in once more, as that app.\n\n1. Open [Blink's sign-in page]({url}) on a computer. Don't use a phone that has the Blink app, because the app would take over the sign-in.\n2. Sign in with the same Blink account and enter the code Blink sends you.\n3. Blink then goes to a page whose address starts with `https://applinks.blink.com/signin/callback`. The page itself may be blank or show an error. Copy the whole address from the address bar and paste it below.",
+        "description": "Blink only sends instant events to its Android app, so Home Assistant signs in once more, as that app.\n\n1. Open [Blink's sign-in page]({url}) on a computer. Don't use a phone that has the Blink app, because the app would take over the sign-in.\n2. Sign in with the same Blink account and enter the code Blink sends you.\n3. Blink then goes to a page whose address starts with `{callback}`. The page itself may be blank or show an error. Copy the whole address from the address bar and paste it below.",
         "data": {
           "callback_url": "Address Blink ended on"
         }
@@ -161,7 +161,7 @@
       }
     },
     "error": {
-      "bad_callback": "That isn't the address Blink ended on. It starts with https://applinks.blink.com/signin/callback?code=. Copy it from the same sign-in page this form showed.",
+      "bad_callback": "That isn't the address Blink ended on. It starts with {callback}. Copy it from the same sign-in page this form showed.",
       "sign_in_expired": "Blink didn't accept that sign-in; it may have expired. Open the new link and sign in again.",
       "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
       "wrong_account": "Sign in with the same Blink account as before."

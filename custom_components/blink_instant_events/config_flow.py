@@ -15,7 +15,7 @@ from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, CONF_PIN
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import async_push_sign_in, callback_code, sign_in_request
+from .api import REDIRECT_URI, async_push_sign_in, callback_code, sign_in_request
 from .const import CONF_AUTH, CONF_PUSH_AUTH, CONF_SNAPSHOT_AFTER_MOTION, CONF_VISION_URL, DOMAIN
 
 CONF_CALLBACK_URL = "callback_url"
@@ -164,6 +164,6 @@ class BlinkOptionsFlow(OptionsFlow):
         return self.async_show_form(
             step_id="push_sign_in",
             data_schema=vol.Schema({vol.Required(CONF_CALLBACK_URL): str}),
-            description_placeholders={"url": self._sign_in[0]},
+            description_placeholders={"url": self._sign_in[0], "callback": REDIRECT_URI},
             errors=errors,
         )
