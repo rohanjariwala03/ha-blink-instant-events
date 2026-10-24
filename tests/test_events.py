@@ -53,11 +53,24 @@ async def test_doorbell_and_motion(hass: HomeAssistant, setup_entry, mock_accoun
     mock_account.receipt.assert_awaited_once_with("u1")
 
     outdoor = entity_id(hass, "G8T1-0001")
-    listener._on_push(push(event_type="cam2sm_motion", camera_name="Backyard", category="motion"), "p2")
+    listener._on_push(
+        push(
+            event_type="cam2sm_motion",
+            camera_name="Backyard",
+            category="motion",
+            detection_type="person",
+            detections=["person"],
+            message="",
+        ),
+        "p2",
+    )
     await hass.async_block_till_done()
     state = hass.states.get(outdoor)
     assert state.attributes["event_type"] == "motion"
     assert state.attributes["category"] == "motion"
+    assert state.attributes["detection_type"] == "person"
+    assert state.attributes["detections"] == ["person"]
+    assert "message" not in state.attributes
     assert "doorbell_press" not in state.attributes["event_types"]
 
 

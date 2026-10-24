@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Push events carry Blink's own `detection_type`, `detections`, `title` and `message` when Blink sends
+  them.
 - **Pushes now arrive.** Blink sends pushes only to clients of its Android app, and the push token
   had been registered on blinkpy's iOS-client session, so no push ever came. Pushes now use an
   Android-client session of their own, set up with **Configure → Sign in for instant events**. A
