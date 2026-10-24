@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- An icon: Home Assistant shows it for the integration (from `brand/`), and the add-on store for
+  Blink Vision.
 - Smart detection with the new **Blink Vision** add-on (in this repository): each new clip is
   read locally for faces (taught by name), people, vehicles and animals. Results fire as a
   `detection` event (with a signed link to the frame, boxes drawn), show in
