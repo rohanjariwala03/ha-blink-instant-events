@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import BlinkInstantConfigEntry
+from . import BlinkInstantConfigEntry, controls
 from .entity import BlinkCameraEntity
 from .settings import BlinkSettingEntity, offered
 
@@ -27,7 +27,11 @@ async def async_setup_entry(
     async_add_entities(
         [
             *(BlinkMotionSwitch(coordinator, cam, "motion_detection") for cam in coordinator.blink.cameras.values()),
-            *(BlinkFloodLight(settings, cam, "flood_light") for cam in offered(settings, "flood_light")),
+            *(
+                BlinkFloodLight(settings, cam, "flood_light")
+                for cam in offered(settings, "flood_light")
+                if str(cam.product_type or "").casefold() not in controls.LIVE_LIGHT_TYPES
+            ),
         ]
     )
 

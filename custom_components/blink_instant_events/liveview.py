@@ -154,6 +154,7 @@ class ImmisStream(BlinkLiveStream):
                 msgtype, sequence, payload = frame
                 if msgtype == IMMI_ACCESSORY and sequence in (0, 1):
                     self.flood_light = sequence == 1
+                    _LOGGER.debug("%s reports its light %s", self.camera.name, "on" if self.flood_light else "off")
                 elif msgtype == 0x00 and payload[:1] == b"\x47" and (data := self._guard.push(payload)):
                     await self._send(data)
                 await asyncio.sleep(0)

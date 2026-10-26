@@ -157,7 +157,8 @@ at that rate, then `{"type":"stop"}`. The server answers `{"type":"started"}`,
 `temperature` is in Home Assistant's unit. After a POST: `rejected` (Blink refused), `busy`
 (camera busy, try later), `pending` (accepted, not reflected yet), `deferred` (will be written when
 the live view ends; the next GET carries `deferred_result`). The flood light goes over the live view
-itself while one is open.
+itself while one is open. The Blink Mini 2's light (`flood_light` too) works only then; without a
+live view the POST answers 400.
 
 ### Not carried over from the proxy
 

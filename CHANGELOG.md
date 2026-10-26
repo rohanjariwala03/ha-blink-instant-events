@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Blink Mini 2 (`hawk`): its light can be switched in the live-view controls, over the live view as
+  in the Blink app. Outside a live view the controls say it works only there; no switch entity.
 - Blink Vision 0.1.1: stops cleanly (it ignored SIGTERM as PID 1, so a stop ended in "error").
 - **Smart detection without a Blink subscription**: option **Look with live view after motion**
   reads 8 seconds of live view after each push when there are no clips. A look that sees nobody
