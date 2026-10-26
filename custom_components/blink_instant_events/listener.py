@@ -127,12 +127,15 @@ class BlinkPushListener:
 
     async def async_stop(self) -> None:
         """Stop the FCM client."""
-        if self._client:
+        await self._stop_client()
+
+    async def _stop_client(self) -> None:
+        # A client whose start never ran (Blink or DNS unreachable) has no stopping lock, and its stop() raises.
+        if self._client and self._client.run_state is not FcmPushClientRunState.CREATED:
             await self._client.stop()
 
     async def _async_connect(self) -> None:
-        if self._client:
-            await self._client.stop()
+        await self._stop_client()
         self._associated_at = 0.0
         self._client = FcmPushClient(
             self._on_push,

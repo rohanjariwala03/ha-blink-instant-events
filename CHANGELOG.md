@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reloading or unloading no longer fails when the push client never started (Blink or DNS unreachable at
+  setup): firebase_messaging's stop() raised on a client that had not started, which left the entry in
+  "failed unload" until Home Assistant restarted.
 - Blink Mini 2 (`hawk`): its light can be switched in the live-view controls, over the live view as
   in the Blink app. Outside a live view the controls say it works only there; no switch entity.
 - Blink Vision 0.1.1: stops cleanly (it ignored SIGTERM as PID 1, so a stop ended in "error").
