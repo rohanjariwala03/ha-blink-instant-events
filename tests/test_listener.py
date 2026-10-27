@@ -56,6 +56,18 @@ async def test_reconnect_with_backoff(
     mock_account.associate.assert_awaited_with("new-token")
 
 
+async def test_unload_after_push_never_started(
+    hass: HomeAssistant, setup_entry: MockConfigEntry, mock_fcm: MagicMock
+) -> None:
+    """A client that never got to start (Blink unreachable) is not stopped: firebase_messaging would raise."""
+    client = mock_fcm.return_value
+    client.run_state = FcmPushClientRunState.CREATED
+    client.stop.reset_mock()
+    assert await hass.config_entries.async_unload(setup_entry.entry_id)
+    assert setup_entry.state is ConfigEntryState.NOT_LOADED
+    client.stop.assert_not_awaited()
+
+
 async def test_periodic_reassociate_and_reauth(
     hass: HomeAssistant, setup_entry: MockConfigEntry, mock_account: MagicMock
 ) -> None:
