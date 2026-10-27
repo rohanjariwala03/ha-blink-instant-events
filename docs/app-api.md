@@ -80,11 +80,24 @@ Home Assistant does not count it as a failed login and ban the phone's IP).
       "size": 1234567,
       "download_url": "/api/blink_instant_events/clips/7bc0…f41.mp4?hours=720.0&pages=10&limit=100&source=cloud&camera=front_door",
       "thumbnail_url": "/api/blink_instant_events/clips/7bc0…f41.jpg?…",
-      "cached": false
+      "cached": false,
+      "detection": {
+        "summary": "Rohan and an unknown person",
+        "people": ["Rohan"],
+        "unknown_faces": 1,
+        "labels": ["person"],
+        "known_only": false,
+        "image_url": "/api/blink_instant_events/detections/7bc0…f41.jpg"
+      }
     }
-  ]
+  ],
+  "smart_detection": true
 }
 ```
+
+`detection` is `null` until Blink Vision has read the clip (or always, without the add-on);
+`smart_detection` says whether the add-on is reachable. `GET <image_url>` (bearer) → the analyzed
+frame with boxes drawn.
 
 Limits: `hours` 0.1–720, `pages` 1–10 (cloud pages of ~25), `limit` 1–100. Newest first.
 `local` clips need a USB drive in the Sync Module; `cloud` clips need a Blink subscription.
@@ -92,6 +105,18 @@ Limits: `hours` 0.1–720, `pages` 1–10 (cloud pages of ~25), `limit` 1–100.
 `GET <download_url>` → `video/mp4`; `GET <thumbnail_url>` → `image/jpeg` (first frame). The first
 request fetches the clip from Blink (several seconds; one at a time), later ones come from disk and
 answer byte ranges. `cached: true` in the listing means the thumbnail is already on disk.
+
+### People (bearer; Blink Vision)
+
+| Method + path | Answer |
+| --- | --- |
+| `GET /api/blink_instant_events/people` | `{"people": [{"name": "Rohan", "photos": 3}]}` |
+| `POST /api/blink_instant_events/people/<name>` | Body: one JPEG (≤ 10 MB) showing the face. Learns the largest face: `{"name", "photos"}`; **422** `{"error"}` when there's no face or it's too small. Admins only. |
+| `DELETE /api/blink_instant_events/people/<name>` | Forgets every photo of `<name>`. Admins only. |
+| `GET /api/blink_instant_events/people/<name>.jpg` | The face from the first photo. |
+
+Names: letters, digits, spaces, `.`, `'`, `-`; up to 40 characters. **503** while Blink Vision is
+not running.
 
 ### Live view, under `/api/blink_instant_events/cameras/<slug>/`
 
@@ -132,7 +157,8 @@ at that rate, then `{"type":"stop"}`. The server answers `{"type":"started"}`,
 `temperature` is in Home Assistant's unit. After a POST: `rejected` (Blink refused), `busy`
 (camera busy, try later), `pending` (accepted, not reflected yet), `deferred` (will be written when
 the live view ends; the next GET carries `deferred_result`). The flood light goes over the live view
-itself while one is open.
+itself while one is open. The Blink Mini 2's light (`flood_light` too) works only then; without a
+live view the POST answers 400.
 
 ### Not carried over from the proxy
 

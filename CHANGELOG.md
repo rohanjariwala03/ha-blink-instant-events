@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+- Reloading or unloading no longer fails when the push client never started (Blink or DNS unreachable at
+  setup): firebase_messaging's stop() raised on a client that had not started, which left the entry in
+  "failed unload" until Home Assistant restarted.
+- Blink Mini 2 (`hawk`): its light can be switched in the live-view controls, over the live view as
+  in the Blink app. Outside a live view the controls say it works only there; no switch entity.
+- Blink Vision 0.1.1: stops cleanly (it ignored SIGTERM as PID 1, so a stop ended in "error").
+- **Smart detection without a Blink subscription**: option **Look with live view after motion**
+  reads 8 seconds of live view after each push when there are no clips. A look that sees nobody
+  says "Gone before the camera looked" rather than "Nothing found".
+- Push events carry Blink's own `detection_type`, `detections`, `title` and `message` when Blink sends
+  them.
+- **Pushes now arrive.** Blink sends pushes only to clients of its Android app, and the push token
+  had been registered on blinkpy's iOS-client session, so no push ever came. Pushes now use an
+  Android-client session of their own, set up with **Configure → Sign in for instant events**. A
+  repair asks for it until it's done; when it expires, the repair returns (it no longer asks you
+  to sign in to the whole integration again).
+- `cv_motion` pushes (Outdoor 4) count as motion.
+- The push sign-in trades Blink's code together with the hardware id it was issued to, and logs
+  Blink's reason when it refuses one.
+- An icon: Home Assistant shows it for the integration (from `brand/`), and the add-on store for
+  Blink Vision.
+- Smart detection with the new **Blink Vision** add-on (in this repository): each new clip is
+  read locally for faces (taught by name), people, vehicles and animals. Results fire as a
+  `detection` event (with a signed link to the frame, boxes drawn), show in
+  `image.<camera>_last_detection`, and label clips in the clips API. People API to teach and
+  forget faces. A motion push starts looking for its clip right away.
+- `blink_instant_events.show_on_tv`: a camera's live view on a Cast TV, e.g. when the doorbell
+  rings; finds the Cast entity of a TV added through another integration.
+- The push reconnect now waits out its backoff before re-pairing with Blink too (it retried every
+  minute while Blink was unreachable).
+
 - When ffmpeg stops early, the live view error now carries its exit code and its last lines.
 - Tests: the fake Blink camera tolerates the client hanging up mid-send; the system ffmpeg is used
   when there is one.

@@ -17,6 +17,7 @@ from firebase_messaging import FcmPushClient, FcmPushClientRunState
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
@@ -25,6 +26,7 @@ from homeassistant.util import dt as dt_util, slugify
 from .api import BlinkAccount
 from .const import (
     CONF_FCM,
+    DOMAIN,
     DOORBELL_TYPES,
     EVENT_DOORBELL,
     EVENT_MOTION,
@@ -44,6 +46,8 @@ NESTED_KEYS = ("data", "payload", "message", "notification")
 ID_KEYS = ("camera_id", "doorbell_id", "owl_id", "device_id", "camera")
 NAME_KEYS = ("camera_name", "device_name", "camera")
 ATTR_KEYS = ("network_id", "created_at", "category", "media_id", "clip_id", "video_id", "thumbnail")
+# What Blink's own detection says ("person", ...) and the notification text the Blink app shows.
+DETECTION_KEYS = ("detection_type", "detections", "title", "message")
 DEAD_STATES = {FcmPushClientRunState.STOPPING, FcmPushClientRunState.STOPPED}
 
 
@@ -70,6 +74,20 @@ def classify(payload: dict[str, Any]) -> str | None:
     if raw in MOTION_TYPES:
         return EVENT_MOTION
     return slugify(raw) or None
+
+
+@callback
+def ask_push_sign_in(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """A repair: pushes need the Android sign-in in the integration's options."""
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        f"push_sign_in_{entry.entry_id}",
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="push_sign_in",
+        translation_placeholders={"account": entry.title},
+    )
 
 
 class BlinkPushListener:
@@ -109,12 +127,15 @@ class BlinkPushListener:
 
     async def async_stop(self) -> None:
         """Stop the FCM client."""
-        if self._client:
+        await self._stop_client()
+
+    async def _stop_client(self) -> None:
+        # A client whose start never ran (Blink or DNS unreachable) has no stopping lock, and its stop() raises.
+        if self._client and self._client.run_state is not FcmPushClientRunState.CREATED:
             await self._client.stop()
 
     async def _async_connect(self) -> None:
-        if self._client:
-            await self._client.stop()
+        await self._stop_client()
         self._associated_at = 0.0
         self._client = FcmPushClient(
             self._on_push,
@@ -136,17 +157,19 @@ class BlinkPushListener:
         if self._lock.locked():
             return
         async with self._lock:
+            if time.monotonic() < self._next_try:
+                return
             try:
                 if self._client and self._client.run_state not in DEAD_STATES:
                     if time.monotonic() - self._associated_at > REASSOCIATE_SECONDS:
                         await self.account.async_associate(self._client.credentials["fcm"]["registration"]["token"])
                         self._associated_at = time.monotonic()
-                elif time.monotonic() >= self._next_try:
+                else:
                     await self._async_connect()
-                    self._failures = 0
+                self._failures = 0
             except UnauthorizedError:
-                _LOGGER.warning("Blink session expired; sign in again")
-                self.entry.async_start_reauth(self.hass)
+                _LOGGER.warning("Blink push session expired; sign in for instant events again")
+                ask_push_sign_in(self.hass, self.entry)
             except (ClientError, TimeoutError, RuntimeError) as err:
                 self._failures += 1
                 delay = min(60 * 2**self._failures, MAX_BACKOFF_SECONDS)
@@ -204,6 +227,7 @@ class BlinkPushListener:
             "blink_event_type": payload.get("event_type"),
         }
         attributes |= {key: payload[key] for key in ATTR_KEYS if isinstance(payload.get(key), (str, int, float))}
+        attributes |= {key: payload[key] for key in DETECTION_KEYS if payload.get(key) not in (None, "")}
         async_dispatcher_send(
             self.hass,
             SIGNAL_EVENT.format(self.entry.entry_id, device["id"]),

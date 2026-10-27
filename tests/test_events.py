@@ -33,7 +33,7 @@ def entity_id(hass: HomeAssistant, serial: str) -> str:
 def test_classify() -> None:
     """Blink event types map to HA event types."""
     assert classify({"event_type": "button_press"}) == "doorbell_press"
-    for raw in ("cloud_motion", "cam2sm_motion", "pir"):
+    for raw in ("cloud_motion", "cam2sm_motion", "pir", "cv_motion"):
         assert classify({"event_type": raw}) == "motion"
     assert classify({"event_type": "Low Battery"}) == "low_battery"
     assert classify({}) is None
@@ -53,11 +53,24 @@ async def test_doorbell_and_motion(hass: HomeAssistant, setup_entry, mock_accoun
     mock_account.receipt.assert_awaited_once_with("u1")
 
     outdoor = entity_id(hass, "G8T1-0001")
-    listener._on_push(push(event_type="cam2sm_motion", camera_name="Backyard", category="motion"), "p2")
+    listener._on_push(
+        push(
+            event_type="cam2sm_motion",
+            camera_name="Backyard",
+            category="motion",
+            detection_type="person",
+            detections=["person"],
+            message="",
+        ),
+        "p2",
+    )
     await hass.async_block_till_done()
     state = hass.states.get(outdoor)
     assert state.attributes["event_type"] == "motion"
     assert state.attributes["category"] == "motion"
+    assert state.attributes["detection_type"] == "person"
+    assert state.attributes["detections"] == ["person"]
+    assert "message" not in state.attributes
     assert "doorbell_press" not in state.attributes["event_types"]
 
 
@@ -91,7 +104,7 @@ async def test_device_triggers(hass: HomeAssistant, setup_entry) -> None:
     device = dr.async_get(hass).async_get_device_by_identifier((DOMAIN, "G8T1-0002"), setup_entry.entry_id)
     triggers = await async_get_device_automations(hass, DeviceAutomationType.TRIGGER, device.id)
     ours = [t for t in triggers if t["domain"] == DOMAIN]
-    assert {t["type"] for t in ours} == {"motion", "doorbell_press"}
+    assert {t["type"] for t in ours} == {"motion", "doorbell_press", "detection"}
 
     calls: list = []
     hass.services.async_register("test", "record", lambda call: calls.append(call))

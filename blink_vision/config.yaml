@@ -1,0 +1,12 @@
+name: Blink Vision
+version: 0.1.1
+slug: blink_vision
+description: Local face recognition and person, vehicle and animal detection for Blink Instant Events
+url: https://github.com/rohanjariwala03/ha-blink-instant-events/tree/main/blink_vision
+arch:
+  - aarch64
+  - amd64
+init: false
+startup: application
+boot: auto
+# No ports: only Home Assistant (and other add-ons) on the internal network reach it.

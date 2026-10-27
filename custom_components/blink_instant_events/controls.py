@@ -52,6 +52,9 @@ from blinkpy import api as blink_api
 LOGGER = logging.getLogger(__name__)
 
 FLOODLIGHT_TYPES = {"superior"}
+# Cameras with a light the Blink app offers only inside a live view (Blink Mini 2). It
+# has no config route, so it goes over the session as the floodlight's lamp does there.
+LIVE_LIGHT_TYPES = {"hawk"}
 # Cameras whose speaker volume the app saves to the v2 config as
 # lfr_sync_interval: their Audio screen has one Volume slider, saving it writes
 # this field, a level written here moves that slider to match, and the speaker
@@ -169,7 +172,7 @@ def capabilities(product_type: str) -> dict[str, bool]:
     """Say which controls a camera of this product type can offer."""
     floodlight = product_type.casefold() in FLOODLIGHT_TYPES
     return {
-        "flood_light": floodlight,
+        "flood_light": floodlight or product_type.casefold() in LIVE_LIGHT_TYPES,
         "night_vision": True,
         "brightness": floodlight,
         # The floodlight has no thermometer; every battery and plug-in camera does.
@@ -505,7 +508,7 @@ async def _lamp_in_band(liveview: Any, on: bool, row: dict[str, Any]) -> bool:
         await liveview.set_flood_light(on)
     except (NotImplementedError, RuntimeError) as err:
         LOGGER.info(
-            "Could not send the flood light over the live view for %s (%s); trying Blink's lights route",
+            "Could not send the light over the live view for %s (%s)",
             row.get("slug"),
             err,
         )
@@ -541,7 +544,13 @@ async def apply_changes(
     for kind, payload, controls in write_plan(row, clean):
         if kind == "lights":
             if liveview is not None and await _lamp_in_band(liveview, payload, row):
+                if _product_type(row) in LIVE_LIGHT_TYPES and liveview.flood_light is None:
+                    # Not known whether the Mini 2 reports its light back; show
+                    # what was sent until it does.
+                    liveview.flood_light = payload
                 continue
+            if _product_type(row) in LIVE_LIGHT_TYPES:
+                raise ControlError("This camera's light works only during live view")
             answer = await blink_api.request_floodlight(blink, network, camera_id, payload)
             if _answer_busy(answer):
                 busy.extend(controls)

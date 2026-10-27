@@ -9,7 +9,10 @@ DOMAIN = "blink_instant_events"
 
 CONF_AUTH = "auth"
 CONF_FCM = "fcm"
+CONF_PUSH_AUTH = "push_auth"  # the Android-client session Blink pushes to
 CONF_SNAPSHOT_AFTER_MOTION = "snapshot_after_motion"
+CONF_VISION_URL = "vision_url"
+CONF_LIVE_LOOK = "live_look"  # no clips (no Blink subscription): read a few seconds of live view after a push
 
 # What blinkpy and Blink's odd answers raise; reported as 502 (or a failed update) rather than escaping as 500.
 BLINK_ERRORS = (ClientError, RuntimeError, TimeoutError, KeyError, ValueError, TypeError, OSError)
@@ -26,11 +29,13 @@ CLIENT_NAME = "Home Assistant Instant Events"
 
 EVENT_MOTION = "motion"
 EVENT_DOORBELL = "doorbell_press"
-MOTION_TYPES = {"cloud_motion", "cam2sm_motion", "pir"}
+EVENT_DETECTION = "detection"  # Blink Vision looked at the clip
+MOTION_TYPES = {"cloud_motion", "cam2sm_motion", "pir", "cv_motion"}
 DOORBELL_TYPES = {"button_press"}
 
 SIGNAL_EVENT = f"{DOMAIN}_event_{{}}_{{}}"
 SIGNAL_CONNECTION = f"{DOMAIN}_connection_{{}}"
+SIGNAL_DETECTION = f"{DOMAIN}_detection_{{}}"
 
 POLL_SECONDS = 300
 MAX_POLL_SECONDS = 3600
