@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Push no longer drops every minute or two.** firebase-messaging 0.4.5 decodes a push's crypto-key and
+  salt without adding base64 padding; a push carrying them unpadded raised "Incorrect padding", the push
+  client shut down, reconnected and was handed the same push again, so the Push connection sensor (and any
+  alert on it) flipped off and on all day. They're now padded (and read up to any ";"), and a push that still
+  can't be read is logged and skipped instead of stopping the client.
 - Reloading or unloading no longer fails when the push client never started (Blink or DNS unreachable at
   setup): firebase_messaging's stop() raised on a client that had not started, which left the entry in
   "failed unload" until Home Assistant restarted.

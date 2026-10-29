@@ -51,6 +51,34 @@ DETECTION_KEYS = ("detection_type", "detections", "title", "message")
 DEAD_STATES = {FcmPushClientRunState.STOPPING, FcmPushClientRunState.STOPPED}
 
 
+def _b64(value: str) -> str:
+    """A crypto-key or encryption header value as firebase-messaging can decode it: its first parameter only, padded."""
+    value = value.split(";")[0].strip()
+    return value + "=" * (-len(value) % 4)
+
+
+class _FcmPushClient(FcmPushClient):
+    """FcmPushClient that reads unpadded keys and skips a message it can't read.
+
+    firebase-messaging 0.4.5 base64-decodes a message's crypto-key and salt as they come. Some pushes carry them
+    without padding (or with more parameters after a ";"); decoding raises, the client shuts down, reconnects and gets
+    the same undelivered message again, so push went off and on every minute or two.
+    """
+
+    @staticmethod
+    def _decrypt_raw_data(
+        credentials: dict[str, dict[str, str]], crypto_key_str: str, salt_str: str, raw_data: bytes
+    ) -> bytes:
+        return FcmPushClient._decrypt_raw_data(credentials, _b64(crypto_key_str), _b64(salt_str), raw_data)
+
+    def _handle_data_message(self, msg: Any) -> None:
+        # Skipped, the message still counts as received, so Google doesn't send it again.
+        try:
+            super()._handle_data_message(msg)
+        except Exception as err:  # noqa: BLE001 - one unreadable push must not take the connection down
+            _LOGGER.warning("Skipped a Blink push that couldn't be read: %s", err)
+
+
 def flatten(data: dict[str, Any]) -> dict[str, Any]:
     """Merge JSON nested in data/payload/message/notification into one dict."""
     flat = dict(data)
@@ -137,7 +165,7 @@ class BlinkPushListener:
     async def _async_connect(self) -> None:
         await self._stop_client()
         self._associated_at = 0.0
-        self._client = FcmPushClient(
+        self._client = _FcmPushClient(
             self._on_push,
             FCM_CONFIG,
             self.entry.data.get(CONF_FCM),

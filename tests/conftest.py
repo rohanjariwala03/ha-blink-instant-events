@@ -57,7 +57,7 @@ def config_entry() -> MockConfigEntry:
 @pytest.fixture
 def mock_fcm() -> Generator[MagicMock]:
     """FcmPushClient that 'connects' instantly."""
-    with patch("custom_components.blink_instant_events.listener.FcmPushClient") as cls:
+    with patch("custom_components.blink_instant_events.listener._FcmPushClient") as cls:
         client = cls.return_value
         client.checkin_or_register = AsyncMock(return_value="fcm-token")
         client.start = AsyncMock()
