@@ -16,7 +16,13 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed, async_mock_service
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.blink_instant_events.ai.pipeline import best_frame, split_jpegs, summarize
+from custom_components.blink_instant_events.ai.pipeline import (
+    best_frame,
+    drop_parked,
+    split_jpegs,
+    summarize,
+    vehicle_boxes,
+)
 from custom_components.blink_instant_events.const import CONF_LIVE_LOOK, CONF_VISION_URL
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -218,6 +224,16 @@ async def test_live_look(
         await hass.async_block_till_done(wait_background_tasks=True)
         assert hass.states.get("event.backyard_blink_event").attributes["summary"] == "Gone before the camera looked"
 
+    # The daily budget: three looks used, a limit of three, so the fourth push doesn't wake the camera.
+    live.get_or_start.reset_mock()
+    with (
+        patch("custom_components.blink_instant_events.providers.blink.vision.LOOK_SECONDS", 0),
+        patch("custom_components.blink_instant_events.providers.blink.vision.DEFAULT_LIVE_LOOK_LIMIT", 3),
+    ):
+        config_entry.runtime_data.listener._on_push({"data": json.dumps(body | {"unique_id": "x4"})}, "p4")
+        await hass.async_block_till_done(wait_background_tasks=True)
+    live.get_or_start.assert_not_awaited()
+
 
 async def test_people_api(
     hass: HomeAssistant,
@@ -297,6 +313,16 @@ def test_identity_needs_confirmation() -> None:
     assert strong["identity"] == "known"
 
 
+def test_unclear_face_does_not_make_a_known_visitor_unknown() -> None:
+    """One blurred frame of someone you know: still known, no unknown face."""
+    seen = {"faces": [face("Rohan", 0.40, "known")], "objects": [{"label": "person", "group": "person"}]}
+    blurred = {"faces": [face(None, 0.1, "unclear")], "objects": [{"label": "person", "group": "person"}]}
+    result = summarize([seen, blurred, seen])
+    assert (result["identity"], result["unknown_faces"], result["known_only"]) == ("known", 0, True)
+    alone = summarize([blurred])  # a stranger seen only blurred is still a person nobody recognized
+    assert (alone["identity"], alone["labels"], alone["people"]) == (None, ["person"], [])
+
+
 def test_uncertain_and_unknown_never_count_as_known() -> None:
     """The add-on's uncertain band names a candidate; any unknown face makes the whole event unknown."""
     frames = [
@@ -307,3 +333,25 @@ def test_uncertain_and_unknown_never_count_as_known() -> None:
     assert result["summary"] == "Rohan, possibly Priya, an unknown person and an animal"
     assert result["identity"] == "unknown" and result["known_only"] is False
     assert {"person", "animal", "pet"} <= set(result["labels"])
+
+
+def test_parked_vehicle_is_not_news() -> None:
+    """A car where one stood last time is dropped; a car somewhere else, and people, are kept."""
+
+    def frame(*boxes: tuple[str, list[int]], width: int = 640) -> dict:
+        objects = [{"label": label, "group": label, "score": 0.9, "box": box} for label, box in boxes]
+        return {"width": width, "height": width * 9 // 16, "faces": [], "objects": objects}
+
+    last = vehicle_boxes([frame(("vehicle", [100, 100, 200, 100]))])
+    # Same car in a 1280-wide live view: the same place as a fraction of the frame.
+    now = [
+        frame(
+            ("vehicle", [204, 198, 400, 204]),
+            ("vehicle", [900, 300, 200, 100]),
+            ("person", [210, 200, 50, 150]),
+            width=1280,
+        )
+    ]
+    drop_parked(now, last)
+    assert [obj["box"] for obj in now[0]["objects"]] == [[900, 300, 200, 100], [210, 200, 50, 150]]
+    assert summarize(now)["labels"] == ["person", "vehicle"]

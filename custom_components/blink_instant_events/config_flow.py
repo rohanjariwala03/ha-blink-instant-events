@@ -40,6 +40,7 @@ from .const import (
     CONF_KEEP_DAYS,
     CONF_KEYFRAMES_ONLY,
     CONF_LIVE_LOOK,
+    CONF_LIVE_LOOK_LIMIT,
     CONF_MAX_GB,
     CONF_MOTION,
     CONF_POST,
@@ -52,6 +53,7 @@ from .const import (
     CONF_VISION_TOKEN,
     CONF_VISION_URL,
     CONF_WIDTH,
+    DEFAULT_LIVE_LOOK_LIMIT,
     DOMAIN,
     PROVIDER_BLINK,
     PROVIDER_CAMERA,
@@ -140,7 +142,8 @@ class BlinkInstantEventsConfigFlow(ConfigFlow, domain=DOMAIN):
             except BlinkTwoFARequiredError:
                 return await self.async_step_2fa()
             except (LoginError, TokenRefreshFailed):
-                errors["base"] = "invalid_auth"
+                # blinkpy reports a wrong password and Blink refusing the client (an empty 401, a 406) alike.
+                errors["base"] = "blink_refused"
             except (ClientError, TimeoutError):
                 errors["base"] = "cannot_connect"
             except Exception:
@@ -326,6 +329,9 @@ class BlinkOptionsFlow(OptionsFlow):
                         CONF_SNAPSHOT_AFTER_MOTION, default=options.get(CONF_SNAPSHOT_AFTER_MOTION, False)
                     ): bool,
                     vol.Required(CONF_LIVE_LOOK, default=options.get(CONF_LIVE_LOOK, False)): bool,
+                    vol.Required(
+                        CONF_LIVE_LOOK_LIMIT, default=options.get(CONF_LIVE_LOOK_LIMIT, DEFAULT_LIVE_LOOK_LIMIT)
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=500)),
                     vol.Optional(
                         CONF_VISION_URL, description={"suggested_value": options.get(CONF_VISION_URL)}
                     ): vol.All(str, vol.Match(r"^https?://\S+$")),

@@ -34,6 +34,8 @@ CONF_SNAPSHOT_AFTER_MOTION = "snapshot_after_motion"
 CONF_VISION_URL = "vision_url"
 CONF_VISION_TOKEN = "vision_token"
 CONF_LIVE_LOOK = "live_look"  # no clips (no Blink subscription): read a few seconds of live view after a push
+CONF_LIVE_LOOK_LIMIT = "live_look_limit"  # live looks per camera per day; each wakes a battery camera
+DEFAULT_LIVE_LOOK_LIMIT = 30
 
 # What blinkpy and Blink's odd answers raise; reported as 502 (or a failed update) rather than escaping as 500.
 BLINK_ERRORS = (ClientError, RuntimeError, TimeoutError, KeyError, ValueError, TypeError, OSError)

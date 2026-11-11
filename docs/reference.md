@@ -213,6 +213,10 @@ it. Never expose it to the internet. Thresholds can be set in `/data/options.jso
   diagnostics show `smart_detection`. A 401 in the log means the token changed: set it up again.
 - **Motion too often / too rarely** (RTSP): raise or lower *motion sensitivity*; trees, rain and the
   camera's day/night switch move many pixels.
+- **A vehicle that never shows up**: a vehicle where one stood in the camera's last detection counts as
+  parked and is left out. After a restart the first detection still reports it once.
+- **Faces "unclear"**: Camera Vision found a face too blurred to read. Lower `min_detect_sharpness` in the
+  add-on options if sharp faces come out unclear; raise it if blurred ones come out unknown.
 - **Faces never known**: faces under ~32 px can't be told apart (a high-mounted camera mostly says
   "a person"); teach more photos, or lower `same_person` in the add-on options a little.
 - **Blink**: see the poll sensor's `last_error`; motion pushes only arrive when the Blink app would

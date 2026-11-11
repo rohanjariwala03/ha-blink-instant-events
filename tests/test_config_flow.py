@@ -64,14 +64,14 @@ async def test_user_flow_with_2fa(hass: HomeAssistant, mock_auth: MagicMock) -> 
 
 
 async def test_bad_password(hass: HomeAssistant, mock_auth: MagicMock) -> None:
-    """Wrong password shows invalid_auth."""
+    """A refused sign-in (wrong password, or Blink refusing the client) says so."""
     mock_auth.startup.side_effect = LoginError
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "blink"})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"email": "me@example.com", "password": "bad"}
     )
-    assert result["errors"] == {"base": "invalid_auth"}
+    assert result["errors"] == {"base": "blink_refused"}
 
 
 async def test_reauth_keeps_fcm(hass: HomeAssistant, mock_auth: MagicMock) -> None:
