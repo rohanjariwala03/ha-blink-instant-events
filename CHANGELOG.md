@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.6
+
+- **"Analyze a camera now" reports parked cars again.** The parked-vehicle filter from 0.7.4 also
+  applied to `process_snapshot`, so asking a second time about a camera with a parked car said
+  "Nothing found". Motion detections still leave parked vehicles out.
+
 ## 0.7.5
 
 - **Archive Blink clips.** Configure → Settings → *Archive new clips* copies every new clip, from Blink's

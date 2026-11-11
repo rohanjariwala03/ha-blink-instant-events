@@ -21,12 +21,20 @@ This used to be *Blink Instant Events*. If you had that installed, just update; 
 
 You need Home Assistant 2026.10 or newer.
 
-1. In HACS, add `https://github.com/rohanjariwala03/ha-local-camera-vision` as a custom repository
-   (type **Integration**). Download **Local Camera Vision** and restart Home Assistant.
-2. For face and person detection, install the **Camera Vision** add-on: Settings → Add-ons → Add-on
-   store → ⋮ → Repositories, add the same URL, then install and start **Camera Vision**. Home Assistant
-   finds it on its own and offers it under Settings → Devices & services → **Discovered**.
-3. Settings → Devices & services → Add integration → **Local Camera Vision**, and pick a camera:
+1. Open it in the Marketplace (HACS), download **Local Camera Vision** and restart Home Assistant.
+
+   [![Open your Home Assistant instance and open this repository in the Marketplace.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=rohanjariwala03&repository=ha-local-camera-vision&category=integration)
+
+   Or add `https://github.com/rohanjariwala03/ha-local-camera-vision` as a custom repository (type
+   **Integration**) by hand.
+2. For face and person detection, add the app repository, then install and start **Camera Vision**.
+   Home Assistant finds it on its own and offers it under Settings → Devices & services → **Discovered**.
+
+   [![Open your Home Assistant instance and add this app repository.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Frohanjariwala03%2Fha-local-camera-vision)
+3. Add the integration and pick a camera:
+
+   [![Open your Home Assistant instance and start setting up Local Camera Vision.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=blink_instant_events)
+
    - **RTSP camera** if you have its stream address, like `rtsp://192.168.1.20:554/stream2`. Use the
      sub-stream if the camera has one: it's plenty for detection and much lighter on a Raspberry Pi.
    - **A camera already in Home Assistant** for ONVIF cameras (add them with Home Assistant's ONVIF
