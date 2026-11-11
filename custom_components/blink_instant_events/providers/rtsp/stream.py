@@ -12,6 +12,7 @@ import asyncio
 from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import datetime
 import io
 import logging
 from pathlib import Path
@@ -43,8 +44,12 @@ class StreamOptions:
     segment_seconds: int = 2
 
 
-def ffmpeg_args(url: str, options: StreamOptions) -> list[str]:
-    """The ffmpeg command line after the binary (url carries the credentials; never log it)."""
+def ffmpeg_args(url: str, options: StreamOptions, run: str = "0") -> list[str]:
+    """The ffmpeg command line after the binary (url carries the credentials; never log it).
+
+    Segments are numbered within a run named by its start time: names by the second collided whenever
+    segments came faster than one a second (a burst after reconnecting), and one overwrote another.
+    """
     args = ["-hide_banner", "-loglevel", "error", "-nostdin"]
     args += ["-rtsp_transport", "tcp", "-timeout", str(IO_TIMEOUT_US), "-protocol_whitelist", PROTOCOLS]
     if options.keyframes_only:
@@ -55,8 +60,8 @@ def ffmpeg_args(url: str, options: StreamOptions) -> list[str]:
     if options.segments is not None:
         # Video only: many cameras send G.711 audio, which MPEG-TS and MP4 can't carry.
         args += ["-map", "0:v:0", "-an", "-c:v", "copy", "-f", "segment", "-segment_format", "mpegts"]
-        args += ["-segment_time", str(options.segment_seconds), "-reset_timestamps", "1", "-strftime", "1"]
-        args += [str(options.segments / "%Y%m%d-%H%M%S.ts")]
+        args += ["-segment_time", str(options.segment_seconds), "-reset_timestamps", "1"]
+        args += [str(options.segments / f"{run}-%06d.ts")]
     return args
 
 
@@ -139,7 +144,7 @@ class RtspReader:
         self._stderr.clear()  # last_error says why this run ended, not every run before it
         self._process = process = await asyncio.create_subprocess_exec(
             self.ffmpeg,
-            *ffmpeg_args(self._url, self.options),
+            *ffmpeg_args(self._url, self.options, datetime.now().strftime("%Y%m%d-%H%M%S.%f")),
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

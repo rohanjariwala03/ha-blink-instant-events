@@ -142,7 +142,7 @@ class Recorder:
         ok = process.returncode == 0
         await self.hass.async_add_executor_job(self._finish, listing, partial, target, ok)
         if not ok:
-            _LOGGER.warning("%s: could not save the event clip: %s", self.label, err.decode(errors="replace")[-200:])
+            _LOGGER.warning("%s: could not save the event clip: %s", self.label, err.decode(errors="replace")[:400])
             return None
         return target
 

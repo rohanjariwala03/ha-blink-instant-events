@@ -70,6 +70,8 @@ def test_ffmpeg_only_opens_rtsp() -> None:
     assert args[args.index("-protocol_whitelist") + 1] == "rtsp,rtsps,rtp,srtp,udp,tcp,tls"
     assert args.index("-skip_frame") < args.index("-i")
     assert "segment" not in args
+    recording = ffmpeg_args("rtsp://cam/x", StreamOptions(segments=Path("/seg")), "20261110-200000.000001")
+    assert recording[-1] == "/seg/20261110-200000.000001-%06d.ts" and "-strftime" not in recording
 
 
 # ------------------------------------------------------------------ end to end
