@@ -40,6 +40,7 @@ class StreamOptions:
     fps: float = 2.0
     width: int = 640
     keyframes_only: bool = False  # decode only keyframes: far less CPU on a Pi, motion seen ~1 GOP later
+    hwaccel: bool = False  # ffmpeg's -hwaccel auto: a GPU decoder if one is usable, else the CPU as before
     segments: Path | None = None  # where recording segments go, or None for no recording
     segment_seconds: int = 2
 
@@ -54,6 +55,8 @@ def ffmpeg_args(url: str, options: StreamOptions, run: str = "0") -> list[str]:
     args += ["-rtsp_transport", "tcp", "-timeout", str(IO_TIMEOUT_US), "-protocol_whitelist", PROTOCOLS]
     if options.keyframes_only:
         args += ["-skip_frame", "nokey"]
+    if options.hwaccel:
+        args += ["-hwaccel", "auto"]
     args += ["-i", url]
     args += ["-map", "0:v:0", "-an", "-vf", f"fps={options.fps},scale='min({options.width},iw)':-2"]
     args += ["-fps_mode", "passthrough", "-c:v", "mjpeg", "-q:v", "5", "-f", "image2pipe", "pipe:1"]

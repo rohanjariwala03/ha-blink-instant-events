@@ -32,11 +32,14 @@ from homeassistant.helpers.selector import (
 from homeassistant.helpers.service_info.hassio import HassioServiceInfo
 
 from .const import (
+    CONF_ARCHIVE,
+    CONF_ARCHIVE_DAYS,
     CONF_AUTH,
     CONF_CAMERA,
     CONF_COOLDOWN,
     CONF_FPS,
     CONF_FRAMES,
+    CONF_HWACCEL,
     CONF_KEEP_DAYS,
     CONF_KEYFRAMES_ONLY,
     CONF_LIVE_LOOK,
@@ -53,6 +56,7 @@ from .const import (
     CONF_VISION_TOKEN,
     CONF_VISION_URL,
     CONF_WIDTH,
+    DEFAULT_ARCHIVE_DAYS,
     DEFAULT_LIVE_LOOK_LIMIT,
     DOMAIN,
     PROVIDER_BLINK,
@@ -329,6 +333,10 @@ class BlinkOptionsFlow(OptionsFlow):
                         CONF_SNAPSHOT_AFTER_MOTION, default=options.get(CONF_SNAPSHOT_AFTER_MOTION, False)
                     ): bool,
                     vol.Required(CONF_LIVE_LOOK, default=options.get(CONF_LIVE_LOOK, False)): bool,
+                    vol.Required(CONF_ARCHIVE, default=options.get(CONF_ARCHIVE, False)): bool,
+                    vol.Required(
+                        CONF_ARCHIVE_DAYS, default=options.get(CONF_ARCHIVE_DAYS, DEFAULT_ARCHIVE_DAYS)
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=365)),
                     vol.Required(
                         CONF_LIVE_LOOK_LIMIT, default=options.get(CONF_LIVE_LOOK_LIMIT, DEFAULT_LIVE_LOOK_LIMIT)
                     ): vol.All(vol.Coerce(int), vol.Range(min=0, max=500)),
@@ -394,6 +402,7 @@ class RtspOptionsFlow(OptionsFlow):
                 vol.Required(CONF_FPS): _number(0.2, 10, 0.1, "fps"),
                 vol.Required(CONF_WIDTH): _number(160, 1920, 1, "px"),
                 vol.Required(CONF_KEYFRAMES_ONLY): bool,
+                vol.Required(CONF_HWACCEL): bool,
                 vol.Required(CONF_SENSITIVITY): _number(0.1, 50, 0.1, "%"),
                 vol.Required(CONF_FRAMES): _number(1, 10),
                 vol.Required(CONF_COOLDOWN): _number(0, 600, 1, "s"),

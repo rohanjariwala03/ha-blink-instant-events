@@ -142,6 +142,15 @@ Recordings older than *keep for* are deleted, the oldest go first above *at most
 pauses while the disk has under 2 GB free and resumes by itself. Blink's own clips are separate: they
 are listed and fetched from Blink (HTTP API, Media panel) and are never mixed with local recordings.
 
+## Archiving Blink clips
+
+Off by default. **Configure → Settings → Archive new clips** copies each new Blink clip to the media
+folder (Media › My media › `blink_instant_events/blink/<camera>/<date>/`, named `HHMMSS-cloud.mp4` or
+`HHMMSS-local.mp4`) and deletes them after *Keep archived clips for* days. Clips from the Sync Module's USB
+drive work without a Blink subscription. It checks once an hour and copies one clip at a time; while a live
+view is open it waits for the next hour, because the Sync Module has to upload each USB clip first and a
+busy module makes the Blink app say "system busy". Under 2 GB free it stops copying until there is room.
+
 ## Smart detection on Blink cameras
 
 Every new Blink clip is read the same way: frames one second apart through the add-on. A push starts
@@ -159,6 +168,8 @@ an add-on. What matters for speed:
 - **Use sub-streams** for RTSP cameras and leave *frame width* at 640. The Pi 5 has no hardware H.264
   decoder, so decoding is on the CPU; a 640×360 sub-stream at 2 fps costs little, a 4K main stream a lot.
   *Decode keyframes only* cuts it further.
+  On an Intel or AMD mini PC, turn on *Hardware decoding* (per camera, under Configure) to decode on the
+  graphics chip; ffmpeg falls back to the CPU when it can't use it.
 - **Detection runs only after motion**, on up to 10 frames, one camera at a time; frames that arrive while
   the Pi is busy are dropped, not queued. Identical frames are analyzed once.
 - **Measure before buying an accelerator.** In the add-on:
@@ -166,7 +177,7 @@ an add-on. What matters for speed:
   prints milliseconds per stage. On an Apple M-series Mac (8 cores) one frame takes about 136 ms
   (faces 18 ms, objects 121 ms); a Pi 5 has not been measured yet and will be slower. Multiply by the
   frames per detection to get the delay before a notification.
-- **Accelerators** are not supported yet. Hailo (AI HAT+) is the realistic option for a Pi 5, if the
+- **Detection accelerators** are not supported yet. Hailo (AI HAT+) is the realistic option for a Pi 5, if the
   benchmark shows the CPU is too slow; Coral's Python library is unmaintained. None is required.
 
 ## Docker

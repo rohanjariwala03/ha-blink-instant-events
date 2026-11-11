@@ -70,6 +70,9 @@ def test_ffmpeg_only_opens_rtsp() -> None:
     assert args[args.index("-protocol_whitelist") + 1] == "rtsp,rtsps,rtp,srtp,udp,tcp,tls"
     assert args.index("-skip_frame") < args.index("-i")
     assert "segment" not in args
+    assert "-hwaccel" not in args
+    gpu = ffmpeg_args("rtsp://cam/x", StreamOptions(hwaccel=True))
+    assert gpu[gpu.index("-hwaccel") + 1] == "auto" and gpu.index("-hwaccel") < gpu.index("-i")
     recording = ffmpeg_args("rtsp://cam/x", StreamOptions(segments=Path("/seg")), "20261110-200000.000001")
     assert recording[-1] == "/seg/20261110-200000.000001-%06d.ts" and "-strftime" not in recording
 
