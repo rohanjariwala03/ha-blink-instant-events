@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
+from .ai.services import async_setup_services as async_setup_ai_services
 from .ai.views import async_register_views
 from .const import DOMAIN
 from .providers.blink.tv import async_setup_services
@@ -18,6 +19,7 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Actions and the smart-detection API exist even while no camera is set up."""
     async_setup_services(hass)
+    async_setup_ai_services(hass)
     async_register_views(hass)
     return True
 

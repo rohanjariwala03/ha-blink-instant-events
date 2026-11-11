@@ -319,6 +319,48 @@
           "description": "Do nothing when the TV is off, instead of turning it on."
         }
       }
+    },
+    "enroll_face": {
+      "name": "Teach a face",
+      "description": "Admins only. Teaches Blink Vision this person's face from a camera's current picture or a photo file (one face, close, sharp, facing the camera). Unknown faces are never learned by themselves.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Who it is (letters, digits, spaces, . ' -)."
+        },
+        "camera": {
+          "name": "Camera",
+          "description": "Take the photo from this camera now."
+        },
+        "file": {
+          "name": "Photo file",
+          "description": "A JPEG or PNG in a folder Home Assistant allows, e.g. /media."
+        },
+        "force": {
+          "name": "Even if it looks like someone else",
+          "description": "Keep the photo although it already matches another person."
+        }
+      }
+    },
+    "delete_face": {
+      "name": "Forget a face",
+      "description": "Admins only. Deletes every photo and face feature kept for this person.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Who to forget."
+        }
+      }
+    },
+    "process_snapshot": {
+      "name": "Analyze a camera now",
+      "description": "Sends any camera's current picture through smart detection and returns what it found (who, what, how sure).",
+      "fields": {
+        "camera": {
+          "name": "Camera",
+          "description": "Any camera in Home Assistant."
+        }
+      }
     }
   },
   "issues": {

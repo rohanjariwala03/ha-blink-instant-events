@@ -22,3 +22,38 @@ show_on_tv:
       default: true
       selector:
         boolean:
+
+enroll_face:
+  fields:
+    name:
+      required: true
+      example: Rohan
+      selector:
+        text:
+    camera:
+      selector:
+        entity:
+          domain: camera
+    file:
+      example: /media/faces/rohan.jpg
+      selector:
+        text:
+    force:
+      default: false
+      selector:
+        boolean:
+
+delete_face:
+  fields:
+    name:
+      required: true
+      selector:
+        text:
+
+process_snapshot:
+  fields:
+    camera:
+      required: true
+      selector:
+        entity:
+          domain: camera

@@ -1,0 +1,111 @@
+"""Actions for smart detection, for any camera: teach or forget a face, analyze a camera's picture now.
+
+Teaching and forgetting are admin-only (they decide whose visits stay quiet). A photo comes from a camera
+entity or from a file in a folder Home Assistant allows (allowlist_external_dirs, e.g. /media).
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+from urllib.parse import quote
+
+from aiohttp import ClientError
+import voluptuous as vol
+
+from homeassistant.components.camera import async_get_image
+from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse, callback
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.service import async_register_admin_service
+from homeassistant.util import dt as dt_util, slugify
+
+from ..const import DOMAIN
+from ..providers.base import Source
+from .pipeline import detection_key, get_pipeline
+from .views import MAX_PHOTO
+
+PHOTO = vol.Schema(
+    {
+        vol.Required("name"): vol.All(cv.string, vol.Length(min=1, max=40)),
+        vol.Exclusive("camera", "photo"): cv.entity_domain("camera"),
+        vol.Exclusive("file", "photo"): cv.string,
+        vol.Optional("force", default=False): cv.boolean,
+    }
+)
+NAME = vol.Schema({vol.Required("name"): vol.All(cv.string, vol.Length(min=1, max=40))})
+SNAPSHOT = vol.Schema({vol.Required("camera"): cv.entity_domain("camera")})
+
+
+async def _picture(hass: HomeAssistant, data: dict[str, Any]) -> bytes:
+    if camera := data.get("camera"):
+        try:
+            return (await async_get_image(hass, camera, timeout=10)).content
+        except HomeAssistantError as err:
+            raise HomeAssistantError(f"{camera} gave no picture: {err}") from err
+    if not (file := data.get("file")):
+        raise ServiceValidationError("Give a camera or a file")
+
+    def read() -> bytes:
+        path = Path(file)
+        if not hass.config.is_allowed_path(str(path)):
+            raise ServiceValidationError(f"{file} is not in a folder Home Assistant allows")
+        if not path.is_file() or path.stat().st_size > MAX_PHOTO:
+            raise ServiceValidationError(f"{file} is not a photo of at most 10 MB")
+        return path.read_bytes()
+
+    return await hass.async_add_executor_job(read)
+
+
+async def _vision(hass: HomeAssistant, method: str, path: str, body: bytes | None = None) -> dict[str, Any]:
+    try:
+        status, answer, _kind = await get_pipeline(hass).async_request(method, path, body)
+    except (ClientError, TimeoutError) as err:
+        raise HomeAssistantError(f"Blink Vision did not answer: {type(err).__name__}") from err
+    text = answer.decode(errors="replace")
+    if status != 200:
+        raise HomeAssistantError(f"Blink Vision said {status}: {text[:200]}")
+    try:
+        return json.loads(text)
+    except ValueError as err:
+        raise HomeAssistantError("Blink Vision answered something other than JSON") from err
+
+
+@callback
+def async_setup_services(hass: HomeAssistant) -> None:
+    """Register the actions (once per Home Assistant run)."""
+
+    async def enroll_face(call: ServiceCall) -> ServiceResponse:
+        photo = await _picture(hass, call.data)
+        force = "?force=1" if call.data["force"] else ""
+        return await _vision(hass, "POST", f"/people/{quote(call.data['name'], safe='')}{force}", photo)
+
+    async def delete_face(call: ServiceCall) -> ServiceResponse:
+        return await _vision(hass, "DELETE", f"/people/{quote(call.data['name'], safe='')}")
+
+    async def process_snapshot(call: ServiceCall) -> ServiceResponse:
+        camera = call.data["camera"]
+        pipeline = get_pipeline(hass)
+        await pipeline.async_load()
+        if not pipeline.enabled:
+            await pipeline.async_probe()
+        picture = await _picture(hass, call.data)
+        state = hass.states.get(camera)
+        source = Source("", "camera", camera, slugify(camera), state.name if state else camera, "local")
+        now = dt_util.utcnow()
+        try:
+            row = await pipeline.async_analyze(source, detection_key(camera, now.isoformat()), [picture], now)
+        except (ClientError, RuntimeError) as err:
+            raise HomeAssistantError(f"Could not analyze {camera}: {err}") from err
+        return {k: v for k, v in row.items() if k not in ("entry_id",)}
+
+    async_register_admin_service(
+        hass, DOMAIN, "enroll_face", enroll_face, PHOTO, supports_response=SupportsResponse.OPTIONAL
+    )
+    async_register_admin_service(
+        hass, DOMAIN, "delete_face", delete_face, NAME, supports_response=SupportsResponse.OPTIONAL
+    )
+    hass.services.async_register(
+        DOMAIN, "process_snapshot", process_snapshot, SNAPSHOT, supports_response=SupportsResponse.OPTIONAL
+    )

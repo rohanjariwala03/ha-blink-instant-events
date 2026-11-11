@@ -298,3 +298,59 @@ async def test_addon_discovery(hass: HomeAssistant) -> None:
         await hass.async_block_till_done()  # the update reloads the entry
     assert result["type"] is FlowResultType.ABORT
     assert hass.config_entries.async_entries(DOMAIN)[0].data["vision_token"] == "t2"
+
+
+async def test_face_and_snapshot_actions(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, hass_read_only_user, tmp_path: Path, no_cloud: None
+) -> None:
+    """Teach from a camera or an allowed file (admins only), refuse other files, analyze any camera now."""
+    from homeassistant.components.camera import Image  # noqa: PLC0415
+    from homeassistant.core import Context  # noqa: PLC0415
+    from homeassistant.exceptions import ServiceValidationError, Unauthorized  # noqa: PLC0415
+    from homeassistant.setup import async_setup_component  # noqa: PLC0415
+
+    aioclient_mock.get(f"{VISION}/health", json={"ok": True})
+    aioclient_mock.post(f"{VISION}/people/Rohan%20J", json={"name": "Rohan J", "photos": 1})
+    aioclient_mock.post(
+        f"{VISION}/analyze",
+        json={"faces": [], "objects": [{"label": "car", "group": "vehicle", "score": 0.8, "box": [1, 1, 9, 9]}]},
+    )
+    vision = MockConfigEntry(domain=DOMAIN, data={"provider": "vision", "vision_url": VISION})
+    vision.add_to_hass(hass)
+    assert await async_setup_component(hass, DOMAIN, {})
+    await hass.async_block_till_done()
+    picture = Image("image/jpeg", await hass.async_add_executor_job(_jpeg))
+    allowed = tmp_path / "faces"
+    allowed.mkdir()
+    (allowed / "rohan.jpg").write_bytes(picture.content)
+    hass.config.allowlist_external_dirs = {str(allowed)}
+
+    with patch(f"{PKG}.ai.services.async_get_image", return_value=picture):
+        answer = await hass.services.async_call(
+            DOMAIN, "enroll_face", {"name": "Rohan J", "camera": "camera.door"}, blocking=True, return_response=True
+        )
+        assert answer == {"name": "Rohan J", "photos": 1}
+        answer = await hass.services.async_call(
+            DOMAIN,
+            "enroll_face",
+            {"name": "Rohan J", "file": str(allowed / "rohan.jpg"), "force": True},
+            blocking=True,
+            return_response=True,
+        )
+        assert aioclient_mock.mock_calls[-1][1].query == {"force": "1"}
+        with pytest.raises(ServiceValidationError, match="not in a folder"):
+            await hass.services.async_call(
+                DOMAIN, "enroll_face", {"name": "x", "file": "/etc/passwd"}, blocking=True, return_response=True
+            )
+        with pytest.raises(Unauthorized):
+            await hass.services.async_call(
+                DOMAIN,
+                "delete_face",
+                {"name": "Rohan J"},
+                blocking=True,
+                context=Context(user_id=hass_read_only_user.id),
+            )
+        found = await hass.services.async_call(
+            DOMAIN, "process_snapshot", {"camera": "camera.door"}, blocking=True, return_response=True
+        )
+    assert found["summary"] == "A vehicle" and found["labels"] == ["vehicle"]
