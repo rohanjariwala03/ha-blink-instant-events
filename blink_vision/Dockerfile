@@ -6,6 +6,6 @@ RUN pip install --no-cache-dir opencv-python-headless==4.12.0.88 numpy==2.2.6
 COPY fetch_models.py /
 RUN python /fetch_models.py /models && rm /fetch_models.py
 
-COPY server.py /
+COPY server.py benchmark.py /
 ENV MODELS=/models DATA=/data PYTHONUNBUFFERED=1
 CMD ["python", "/server.py"]
