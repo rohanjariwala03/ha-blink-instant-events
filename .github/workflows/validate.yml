@@ -38,13 +38,13 @@ jobs:
           cache: pip
           cache-dependency-path: requirements_test.txt
       - name: Install ffmpeg
-        # apt mirrors sometimes stall with no timeout of their own: 90 seconds per try, two tries.
+        # The runner's Azure Ubuntu mirror sometimes stops answering (2026-11-11); fall back to Ubuntu's own.
         run: |
-          for try in 1 2; do
-            sudo timeout 90 sh -c 'apt-get update && apt-get install -y --no-install-recommends ffmpeg' && exit 0
-            echo "apt try $try failed or stalled"
-          done
-          exit 1
+          install() { sudo timeout 90 sh -c 'apt-get update && apt-get install -y --no-install-recommends ffmpeg'; }
+          install && exit 0
+          echo "Azure's Ubuntu mirror failed; trying archive.ubuntu.com"
+          sudo grep -rl azure.archive.ubuntu.com /etc/apt | xargs sudo sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g'
+          install
       - run: pip install -r requirements_test.txt ruff
       - run: ruff check custom_components blink_vision tests
       - run: ruff format --check custom_components blink_vision tests
