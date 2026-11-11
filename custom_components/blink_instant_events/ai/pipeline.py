@@ -24,9 +24,11 @@ from PIL import Image, ImageDraw
 
 from homeassistant.components.ffmpeg import get_ffmpeg_manager
 from homeassistant.components.http.auth import async_sign_path
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -160,6 +162,15 @@ def split_jpegs(data: bytes) -> list[bytes]:
     return [part + b"\xff\xd9" for part in data.split(b"\xff\xd9") if part.startswith(b"\xff\xd8")]
 
 
+async def async_start_pipeline(hass: HomeAssistant, entry: ConfigEntry) -> Pipeline:
+    """For one entry's lifetime: past detections loaded, the add-on found, and looked for again now and then."""
+    pipeline = get_pipeline(hass)
+    await pipeline.async_load()
+    await pipeline.async_probe()
+    entry.async_on_unload(async_track_time_interval(hass, pipeline.async_probe, PROBE_INTERVAL))
+    return pipeline
+
+
 def get_pipeline(hass: HomeAssistant) -> Pipeline:
     """The one pipeline every camera shares (one add-on, one history)."""
     data = hass.data.setdefault(DOMAIN, {})
@@ -206,9 +217,11 @@ class Pipeline:
     def configured(self) -> list[tuple[str, str | None]]:
         """(url, token) set in any entry's options; then there is no need to ask the Supervisor."""
         return [
-            (url.rstrip("/"), entry.options.get(CONF_VISION_TOKEN) or None)
+            (url.rstrip("/"), settings.get(CONF_VISION_TOKEN) or None)
             for entry in self.hass.config_entries.async_entries(DOMAIN)
-            if (url := entry.options.get(CONF_VISION_URL))
+            if not entry.disabled_by
+            for settings in ({**entry.data, **entry.options},)
+            if (url := settings.get(CONF_VISION_URL))
         ]
 
     async def _candidates(self) -> list[tuple[str, str | None]]:

@@ -16,10 +16,9 @@ from blinkpy.camera import BlinkCamera
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util, slugify
 
-from ...ai.pipeline import PROBE_INTERVAL, Pipeline, detection_key, get_pipeline
+from ...ai.pipeline import Pipeline, async_start_pipeline, detection_key, get_pipeline
 from ...const import BLINK_ERRORS, CONF_LIVE_LOOK, DOMAIN, PROVIDER_BLINK
 from ..base import Source
 from .clips import Clips, clip_id
@@ -60,9 +59,7 @@ class Vision:
 
     async def async_start(self) -> None:
         """Load past results, find the add-on, follow polls."""
-        await self.pipeline.async_load()
-        await self.pipeline.async_probe()
-        self.entry.async_on_unload(async_track_time_interval(self.hass, self.pipeline.async_probe, PROBE_INTERVAL))
+        await async_start_pipeline(self.hass, self.entry)
         self.entry.async_on_unload(self.coordinator.async_add_listener(self._on_refresh))
         self.entry.async_on_unload(self._cancel_watchers)
 

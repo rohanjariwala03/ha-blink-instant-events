@@ -20,9 +20,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from ...ai.entities import LastDetectionSensor
 from . import BlinkInstantConfigEntry
 from .coordinator import BlinkCoordinator
-from .entity import BlinkCameraEntity, hub_device_info
+from .entity import BlinkCameraEntity, detection_target, hub_device_info
 
 PARALLEL_UPDATES = 0
 
@@ -99,6 +100,7 @@ async def async_setup_entry(
             # A sensor that could only ever say "unknown" is left out.
             if description.value(cam) is not None:
                 entities.append(BlinkCameraSensor(coordinator, cam, description))
+        entities.append(LastDetectionSensor(detection_target(entry.entry_id, cam)))
     async_add_entities(entities)
 
 

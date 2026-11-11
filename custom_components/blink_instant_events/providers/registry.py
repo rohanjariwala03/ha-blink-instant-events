@@ -10,10 +10,15 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from ..const import CONF_PROVIDER, PROVIDER_BLINK
-from . import blink
+from ..const import CONF_PROVIDER, PROVIDER_BLINK, PROVIDER_CAMERA, PROVIDER_RTSP, PROVIDER_VISION
+from . import blink, camera, rtsp, vision
 
-PROVIDERS: dict[str, ModuleType] = {PROVIDER_BLINK: blink}
+PROVIDERS: dict[str, ModuleType] = {
+    PROVIDER_BLINK: blink,
+    PROVIDER_RTSP: rtsp,
+    PROVIDER_CAMERA: camera,
+    PROVIDER_VISION: vision,
+}
 
 type PlatformSetup = Callable[[HomeAssistant, Any, AddConfigEntryEntitiesCallback], Awaitable[None]]
 

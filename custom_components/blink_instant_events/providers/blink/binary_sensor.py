@@ -16,10 +16,11 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
+from ...ai.entities import detection_binary_sensors
 from ...const import EVENT_MOTION, MOTION_RESET_SECONDS, SIGNAL_CONNECTION, SIGNAL_EVENT
 from . import BlinkInstantConfigEntry
 from .coordinator import BlinkCoordinator
-from .entity import BlinkCameraEntity, BlinkSyncEntity, hub_device_info
+from .entity import BlinkCameraEntity, BlinkSyncEntity, detection_target, hub_device_info
 
 PARALLEL_UPDATES = 0
 
@@ -38,6 +39,7 @@ async def async_setup_entry(
             BlinkBattery(coordinator, cam, "battery"),
             BlinkCameraConnected(coordinator, cam, "camera_connection"),
         ]
+        entities += detection_binary_sensors(detection_target(entry.entry_id, cam))
     entities += [BlinkSyncConnected(coordinator, sync, "connection") for sync in coordinator.syncs().values()]
     async_add_entities(entities)
 

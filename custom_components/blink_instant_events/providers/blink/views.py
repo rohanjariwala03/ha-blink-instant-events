@@ -19,6 +19,7 @@ from homeassistant.util.unit_conversion import TemperatureConverter
 from ...const import BLINK_ERRORS, DOMAIN
 from . import controls
 from .clips import API as CLIPS_API, clip_id, public_clip
+from .entry import loaded_blink_entry
 from .liveview import TOKEN_TTL_SECONDS, LiveViews, control_row, ptt_supported, talk
 
 if TYPE_CHECKING:
@@ -52,16 +53,16 @@ def async_register_views(hass: HomeAssistant) -> None:
 
 def runtime(request: web.Request) -> BlinkData:
     """The loaded account (one per Home Assistant)."""
-    entries = request.app["hass"].config_entries.async_loaded_entries(DOMAIN)
-    if not entries:
-        raise web.HTTPServiceUnavailable(text="Blink Instant Events is not loaded\n")
-    return entries[0].runtime_data
+    if (entry := loaded_blink_entry(request.app["hass"])) is None:
+        raise web.HTTPServiceUnavailable(text="No Blink account is loaded\n")
+    return entry.runtime_data
 
 
 def blink_failed(request: web.Request, err: Exception) -> web.HTTPException:
     """A 503 (and Home Assistant's reauth prompt) when Blink signed us out, else a 502 with the reason."""
     if isinstance(err, UnauthorizedError):
-        request.app["hass"].config_entries.async_loaded_entries(DOMAIN)[0].async_start_reauth(request.app["hass"])
+        if entry := loaded_blink_entry(request.app["hass"]):
+            entry.async_start_reauth(request.app["hass"])
         return web.HTTPServiceUnavailable(text="Blink signed this session out; re-authenticate in Home Assistant\n")
     return web.HTTPBadGateway(text=f"Blink did not answer as expected: {err}\n")
 

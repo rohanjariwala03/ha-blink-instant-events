@@ -17,7 +17,7 @@ from aiohttp import ClientSession, ClientTimeout
 from blinkpy.auth import Auth, UnauthorizedError
 from blinkpy.helpers.constants import OAUTH_SCOPE, OAUTH_TOKEN_URL, OAUTH_TOKEN_USER_AGENT, OAUTH_V2_CLIENT_ID
 
-from ...const import APP_VERSION, CLIENT_NAME
+from .const import APP_VERSION, CLIENT_NAME
 
 _LOGGER = logging.getLogger(__name__)
 
