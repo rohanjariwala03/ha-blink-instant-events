@@ -1,6 +1,6 @@
 # App API
 
-Everything Blink Instant Events exposes for the iPhone app: entities, attributes and HTTP endpoints.
+Everything Local Camera Vision exposes for the iPhone app: entities, attributes and HTTP endpoints.
 Shapes match Blink Live View Proxy wherever the proxy had them, so switching is mostly a path change
 (`/api/blink_liveview_proxy/` → `/api/blink_instant_events/`). Differences are called out.
 
@@ -49,7 +49,7 @@ An offline module keeps its last arm state; check `status` or the connection sen
 | `binary_sensor.blink_instant_events_push_connection` | `on` while push is connected | — |
 
 Show "Blink signed out" when `state` is `auth_failed`. The fix is Home Assistant's normal reauth:
-Settings → Devices & services shows Blink Instant Events with a **Re-authenticate** prompt; sign in
+Settings → Devices & services shows Local Camera Vision with a **Re-authenticate** prompt; sign in
 and enter the PIN. Everything recovers on its own after it. There is no add-on to restart.
 Polling is every 5 minutes (`interval` doubles up to 3600 s while Blink fails) plus once 30 s after
 each push; motion itself no longer waits for a poll.
@@ -99,7 +99,7 @@ Home Assistant does not count it as a failed login and ban the phone's IP).
 }
 ```
 
-`detection` is `null` until Blink Vision has read the clip (or always, without the add-on);
+`detection` is `null` until Camera Vision has read the clip (or always, without the add-on);
 `smart_detection` says whether the add-on is reachable. `GET <image_url>` (bearer) → the analyzed
 frame with boxes drawn. `people` are confirmed matches (2 frames, or 1 with similarity ≥ 0.5);
 `uncertain` names only possibly match and never count as known; `identity` is the most cautious
@@ -113,7 +113,7 @@ Limits: `hours` 0.1–720, `pages` 1–10 (cloud pages of ~25), `limit` 1–100.
 request fetches the clip from Blink (several seconds; one at a time), later ones come from disk and
 answer byte ranges. `cached: true` in the listing means the thumbnail is already on disk.
 
-### People (bearer; Blink Vision)
+### People (bearer; Camera Vision)
 
 | Method + path | Answer |
 | --- | --- |
@@ -122,7 +122,7 @@ answer byte ranges. `cached: true` in the listing means the thumbnail is already
 | `DELETE /api/blink_instant_events/people/<name>` | Forgets every photo of `<name>`. Admins only. |
 | `GET /api/blink_instant_events/people/<name>.jpg` | The face from the first photo. Admins only. |
 
-Names: letters, digits, spaces, `.`, `'`, `-`; up to 40 characters. **503** while Blink Vision is
+Names: letters, digits, spaces, `.`, `'`, `-`; up to 40 characters. **503** while Camera Vision is
 not running. These work without a Blink account (also as the `enroll_face` / `delete_face` actions).
 
 ### Live view, under `/api/blink_instant_events/cameras/<slug>/`

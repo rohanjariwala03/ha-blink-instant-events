@@ -237,7 +237,7 @@ class Pipeline:
                 if addon.slug.endswith(ADDON_SLUG)
             ]
         except Exception as err:  # noqa: BLE001 - no Supervisor (container installs): only a configured URL works
-            _LOGGER.debug("No Supervisor to find Blink Vision: %s", err)
+            _LOGGER.debug("No Supervisor to find Camera Vision: %s", err)
         return [(f"http://{host}:{ADDON_PORT}", None) for host in hosts]
 
     async def async_probe(self, _now: datetime | None = None) -> None:
@@ -255,7 +255,7 @@ class Pipeline:
                 continue
         if (found and found[0]) != self.url:
             _LOGGER.info(
-                "Blink Vision %s", f"found at {found[0]}" if found else "is not reachable; smart detection is off"
+                "Camera Vision %s", f"found at {found[0]}" if found else "is not reachable; smart detection is off"
             )
         self.url, self.token = found if found else (None, None)
 
@@ -285,7 +285,7 @@ class Pipeline:
         """Analyze one event's frames, store and announce the detection. `empty` replaces "Nothing found"."""
         jpegs = list(dict.fromkeys(jpegs))  # a still camera sends the same picture more than once
         if not jpegs or self.url is None:
-            raise RuntimeError("no frames" if not jpegs else "Blink Vision is not reachable")
+            raise RuntimeError("no frames" if not jpegs else "Camera Vision is not reachable")
         await self.async_load()
         async with self._lock:
             session = async_get_clientsession(self.hass)
@@ -295,7 +295,7 @@ class Pipeline:
                     f"{self.url}/analyze", data=jpeg, headers=self._headers(), timeout=TIMEOUT
                 ) as resp:
                     if resp.status == 401:
-                        raise RuntimeError("Blink Vision refused the token; set it up again")
+                        raise RuntimeError("Camera Vision refused the token; set it up again")
                     resp.raise_for_status()
                     frames.append(await resp.json())
             best = best_frame(frames)
@@ -382,7 +382,7 @@ class Pipeline:
         if self.url is None:
             await self.async_probe()
         if self.url is None:
-            return 503, b'{"error": "Blink Vision is not installed or not running"}', "application/json"
+            return 503, b'{"error": "Camera Vision is not installed or not running"}', "application/json"
         async with async_get_clientsession(self.hass).request(
             method, f"{self.url}{path}", data=data, headers=self._headers(), timeout=TIMEOUT
         ) as resp:

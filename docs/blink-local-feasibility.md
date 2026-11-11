@@ -4,9 +4,9 @@ Question: do Blink Outdoor cameras and the Sync Module 2 expose any local video 
 Home Assistant could use instead of Blink's cloud? Status: research only. Nothing in the integration
 depends on the answers below, and nothing speculative is implemented.
 
-Scope and rules: documented behaviour, this repository's own code and traffic, blinkpy, and published
-community research. No authentication bypass, no firmware modification, nothing that could disturb the
-cameras. Network checks on your own Sync Module are proposed below, not yet run.
+Scope and rules: documented behaviour, this repository's own code and traffic, blinkpy, published
+community research, and passive or read-only checks on one home network's own Sync Module 2 (results
+below). No authentication bypass, no firmware modification, nothing that could disturb the cameras.
 
 ## 1. Confirmed
 
@@ -22,9 +22,8 @@ cameras. Network checks on your own Sync Module are proposed below, not yet run.
 
 ## 2. Unknown
 
-- Whether ports 53 and 80 are open on the **home LAN** after setup, or only on the module's setup access
-  point (the published scans used the module's own `172.16.97.x` network).
-- Whether the port 80 API accepts any command after onboarding, and with which key.
+- ~~Whether ports 53 and 80 are open on the home LAN after setup~~: **they are not** on the module checked
+  (below); the published scans were of the module's own setup network.
 - The sub-GHz protocol between cameras and the Sync Module (only "reverse the Si4455 protocol" as a goal
   in the hardware notes). It is almost certainly a low-rate wake/arm/status link, not video.
 - Whether the Sync Module or a camera ever streams video on the LAN (e.g. camera → module while writing
@@ -59,16 +58,23 @@ The realistic local-first options are the ones this integration now offers: put 
 you need local video and fast detection, and keep Blink cameras for what they do (with smart detection
 running locally on the clips or live looks Blink delivers).
 
-## Proposed checks on your own Sync Module (not run; needs your OK)
+## Checks on a home network (2026-11-10)
 
-All passive or read-only, against your own device on your own LAN, no logins attempted:
+One Sync Module 2 in normal operation (armed network, three cameras), from a computer on the same LAN.
+Passive or read-only; no logins, no requests to any open service.
 
-1. Listen for mDNS and SSDP announcements from the Sync Module for 10 minutes.
-2. One TCP connect scan of the Sync Module's LAN address (all ports), to learn whether 53/80 are open
-   outside setup mode.
-3. If 80 is open: one `GET /` and `GET /api/version`, recording the answers.
-4. Watch the Sync Module's and cameras' traffic destinations on the router during one motion event and
-   one live view (which hosts, not contents).
+| Check | Result |
+| --- | --- |
+| Find it | The router's DHCP names it `blink-sync-module`; a second Blink device (`Blink-Device`, a camera or the doorbell) was also on the LAN. Both answer ping. |
+| mDNS, 3 minutes | No Blink service. Types seen on the network: AirPlay, HomeKit, Home Assistant, Matter, Spotify Connect, Apple pairing. |
+| SSDP (one standard M-SEARCH, then listening) | Only the router answered. Nothing from Blink devices. |
+| TCP connect scan, all 65 535 ports of the Sync Module | **No open port.** Ports 53 and 80 (open in the published setup-mode scans) answer with a refusal. |
+| `GET /`, `/api/version` | Not attempted: nothing listens. |
+| Traffic destinations during motion and live view | Not possible from a computer on a switched network; needs router or mirrored-port logs. From this integration's own traffic, live video comes from the Blink-hosted `immis://` server named in each live-view answer. |
 
-If any of these turned up a local video or event interface, it would get its own experimental module,
-separate from the production providers, and only after it is shown to work.
+So on the home LAN the Sync Module 2 offers nothing to connect to: no local API, no discovery, no
+stream. Its setup API exists only on its own access point during onboarding. This confirms the
+conclusion above. Not checked: UDP services, the camera on the LAN, and other firmware versions.
+
+If a local video or event interface ever turns up, it gets its own experimental module, separate from
+the production providers, and only after it is shown to work.

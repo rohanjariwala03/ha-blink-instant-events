@@ -1,4 +1,4 @@
-"""Not a camera: where Blink Vision runs and the token it wants. Made by itself when the add-on announces
+"""Not a camera: where Camera Vision runs and the token it wants. Made by itself when the add-on announces
 itself through the Supervisor, or by hand for an add-on elsewhere (a Docker container, another machine)."""
 
 from __future__ import annotations

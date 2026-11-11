@@ -1,4 +1,4 @@
-"""Blink Vision: who and what is in a picture, on your own hardware.
+"""Camera Vision: who and what is in a picture, on your own hardware.
 
 POST /analyze           JPEG body -> {"objects": [...], "faces": [...]}
 GET  /people            -> {"people": [{"name", "photos"}]}
@@ -135,7 +135,7 @@ def announce() -> None:
         with urllib.request.urlopen(request, timeout=10) as resp:
             print(f"Announced to Home Assistant ({resp.status})", flush=True)
     except OSError as err:
-        print(f"Could not announce to Home Assistant: {err}; add Blink Vision there by hand", flush=True)
+        print(f"Could not announce to Home Assistant: {err}; add Camera Vision there by hand", flush=True)
 
 
 def load_models() -> None:
@@ -385,7 +385,7 @@ def main() -> None:
     TOKEN = load_token()
     load_models()
     load_people()
-    print(f"Blink Vision listening on :{PORT}, knows {len(known)} people", flush=True)
+    print(f"Camera Vision listening on :{PORT}, knows {len(known)} people", flush=True)
     announce()
     # As PID 1, Python ignores SIGTERM; without this, Docker kills the add-on and the Supervisor shows an error.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))

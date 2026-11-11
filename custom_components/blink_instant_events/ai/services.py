@@ -62,14 +62,14 @@ async def _vision(hass: HomeAssistant, method: str, path: str, body: bytes | Non
     try:
         status, answer, _kind = await get_pipeline(hass).async_request(method, path, body)
     except (ClientError, TimeoutError) as err:
-        raise HomeAssistantError(f"Blink Vision did not answer: {type(err).__name__}") from err
+        raise HomeAssistantError(f"Camera Vision did not answer: {type(err).__name__}") from err
     text = answer.decode(errors="replace")
     if status != 200:
-        raise HomeAssistantError(f"Blink Vision said {status}: {text[:200]}")
+        raise HomeAssistantError(f"Camera Vision said {status}: {text[:200]}")
     try:
         return json.loads(text)
     except ValueError as err:
-        raise HomeAssistantError("Blink Vision answered something other than JSON") from err
+        raise HomeAssistantError("Camera Vision answered something other than JSON") from err
 
 
 @callback

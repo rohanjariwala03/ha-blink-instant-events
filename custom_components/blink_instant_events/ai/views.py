@@ -32,7 +32,7 @@ def _admin(request: web.Request, what: str) -> None:
 
 
 class DetectionImageView(HomeAssistantView):
-    """GET /detections/<id>.jpg: the frame Blink Vision judged, boxes drawn (signed links work too)."""
+    """GET /detections/<id>.jpg: the frame Camera Vision judged, boxes drawn (signed links work too)."""
 
     url = DETECTIONS_API + "/{key}.jpg"
     name = "api:blink_instant_events:detection_image"
@@ -49,16 +49,16 @@ class DetectionImageView(HomeAssistantView):
 
 
 async def to_vision(request: web.Request, method: str, path: str, data: bytes | None = None) -> web.Response:
-    """Answer with what Blink Vision answered."""
+    """Answer with what Camera Vision answered."""
     try:
         status, body, kind = await get_pipeline(request.app["hass"]).async_request(method, path, data)
     except (ClientError, TimeoutError) as err:
-        raise web.HTTPBadGateway(text=f"Blink Vision did not answer: {type(err).__name__}\n") from err
+        raise web.HTTPBadGateway(text=f"Camera Vision did not answer: {type(err).__name__}\n") from err
     return web.Response(status=status, body=body, content_type=kind, headers=NO_STORE)
 
 
 class PeopleView(HomeAssistantView):
-    """GET /people: the people Blink Vision knows, with how many photos of each."""
+    """GET /people: the people Camera Vision knows, with how many photos of each."""
 
     url = PEOPLE_API
     name = "api:blink_instant_events:people"

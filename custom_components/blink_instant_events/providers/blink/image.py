@@ -27,7 +27,7 @@ async def async_setup_entry(
     entry: BlinkInstantConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Add one per camera; they stay empty until Blink Vision has looked at a clip."""
+    """Add one per camera; they stay empty until Camera Vision has looked at a clip."""
     data = entry.runtime_data
     async_add_entities(
         BlinkDetectionImage(hass, data.coordinator, data.vision, cam) for cam in data.coordinator.blink.cameras.values()
@@ -35,7 +35,7 @@ async def async_setup_entry(
 
 
 class BlinkDetectionImage(BlinkCameraEntity, ImageEntity):
-    """Who or what Blink Vision saw last on this camera."""
+    """Who or what Camera Vision saw last on this camera."""
 
     _attr_content_type = "image/jpeg"
 

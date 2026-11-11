@@ -1,4 +1,4 @@
-"""How fast Blink Vision is on this machine: milliseconds per stage, so you know before buying an accelerator.
+"""How fast Camera Vision is on this machine: milliseconds per stage, so you know before buying an accelerator.
 
 In the add-on:   docker exec -it addon_<repo>_blink_vision python /benchmark.py [photo.jpg] [runs]
 Elsewhere:       MODELS=./models python benchmark.py photo.jpg 20

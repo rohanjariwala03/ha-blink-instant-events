@@ -1,4 +1,4 @@
-"""Smart detection (Blink Vision), the people API and show_on_tv."""
+"""Smart detection (Camera Vision), the people API and show_on_tv."""
 
 from __future__ import annotations
 
@@ -94,7 +94,7 @@ async def test_detection_end_to_end(
     hass_client,
     clip_file: Path,
 ) -> None:
-    """Motion push -> clip -> frames -> Blink Vision -> event, image entity, clip label, picture."""
+    """Motion push -> clip -> frames -> Camera Vision -> event, image entity, clip label, picture."""
     aioclient_mock.get(f"{VISION}/health", json={"ok": True})
     aioclient_mock.post(
         f"{VISION}/analyze",
@@ -228,7 +228,7 @@ async def test_people_api(
     aioclient_mock: AiohttpClientMocker,
     hass_client,
 ) -> None:
-    """Passed through to Blink Vision; 503 when it isn't running."""
+    """Passed through to Camera Vision; 503 when it isn't running."""
     config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()

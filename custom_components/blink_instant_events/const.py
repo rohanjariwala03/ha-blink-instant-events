@@ -1,4 +1,4 @@
-"""Constants for Blink Instant Events."""
+"""Constants for Local Camera Vision."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ CONF_PROVIDER = "provider"
 PROVIDER_BLINK = "blink"  # Blink cameras through Blink's cloud
 PROVIDER_RTSP = "rtsp"  # an RTSP stream on the local network
 PROVIDER_CAMERA = "camera"  # a camera another Home Assistant integration provides (ONVIF, Generic, ...)
-PROVIDER_VISION = "vision"  # where Blink Vision runs, for those not found by themselves
+PROVIDER_VISION = "vision"  # where Camera Vision runs, for those not found by themselves
 
 # Local cameras
 CONF_CAMERA = "camera"
@@ -41,7 +41,7 @@ BLINK_ERRORS = (ClientError, RuntimeError, TimeoutError, KeyError, ValueError, T
 
 EVENT_MOTION = "motion"
 EVENT_DOORBELL = "doorbell_press"
-EVENT_DETECTION = "detection"  # Blink Vision looked at the clip
+EVENT_DETECTION = "detection"  # Camera Vision looked at the clip
 EVENT_RECORDING = "recording"  # a local camera's event clip was saved
 MOTION_TYPES = {"cloud_motion", "cam2sm_motion", "pir", "cv_motion"}
 DOORBELL_TYPES = {"button_press"}

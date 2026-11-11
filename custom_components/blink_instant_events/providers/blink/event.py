@@ -1,4 +1,4 @@
-"""One event entity per Blink camera: motion, doorbell_press, detection (Blink Vision), or Blink's raw type."""
+"""One event entity per Blink camera: motion, doorbell_press, detection (Camera Vision), or Blink's raw type."""
 
 from __future__ import annotations
 

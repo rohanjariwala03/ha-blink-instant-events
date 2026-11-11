@@ -1,6 +1,8 @@
 <img src="custom_components/blink_instant_events/brand/icon@2x.png" alt="" width="112" align="right">
 
-# Blink Instant Events
+# Local Camera Vision
+
+*Formerly Blink Instant Events. A Home Assistant integration (HACS); same domain, entities and actions as before.*
 
 Cameras in Home Assistant with smart detection that runs on your own hardware: who is at the door
 (people you taught it, unknown faces, maybe-someone), people, vehicles and pets, as sensors and
@@ -25,7 +27,7 @@ flowchart LR
     RTSP["RTSP camera"] -->|ffmpeg reader| W["motion → frames"]
     HACAM["Camera in Home Assistant<br/>(ONVIF, Generic, …)"] -->|its motion sensor| W
     W --> P["pipeline"]
-    P -->|JPEG frames, token| BV["Blink Vision add-on<br/>YuNet · SFace · YOLOX-S"]
+    P -->|JPEG frames, token| BV["Camera Vision add-on<br/>YuNet · SFace · YOLOX-S"]
     BV --> P
     P --> E["sensors · event · image<br/>history · notifications"]
     W -. optional .-> REC["recorder<br/>(event clips / continuous)"]
@@ -59,18 +61,18 @@ Blink cameras do not offer a local RTSP or ONVIF stream; see
 ## Requirements
 
 - Home Assistant 2026.10 or newer (its built-in `ffmpeg` reads streams and clips)
-- For smart detection: the **Blink Vision** add-on (Home Assistant OS/Supervised) or its Docker image
+- For smart detection: the **Camera Vision** add-on (Home Assistant OS/Supervised) or its Docker image
 - For Blink cameras: a Blink account (email + password + the PIN Blink sends); one per Home Assistant
 
 ## Install
 
 1. HACS → ⋮ → **Custom repositories** → add this repository's URL, category **Integration**.
-2. Download **Blink Instant Events**, restart Home Assistant.
+2. Download **Local Camera Vision**, restart Home Assistant.
 3. For smart detection: Settings › Add-ons › Add-on store › ⋮ › Repositories › add
-   `https://github.com/rohanjariwala03/ha-blink-instant-events`, install **Blink Vision**, start it.
+   `https://github.com/rohanjariwala03/ha-blink-instant-events`, install **Camera Vision**, start it.
    It announces itself (with its token) and Home Assistant offers to set it up under
    **Settings → Devices & services → Discovered**.
-4. **Settings → Devices & services → Add integration → Blink Instant Events**, then pick what to add.
+4. **Settings → Devices & services → Add integration → Local Camera Vision**, then pick what to add.
    Add as many local cameras as you like.
 
 ### An RTSP camera (no account anywhere)
@@ -235,7 +237,7 @@ remove that delay. Each look wakes the camera, much like recording a clip.
 
 ## Raspberry Pi 5
 
-Home Assistant OS on a Pi 5 (8 GB, SSD) runs everything: the integration in Home Assistant, Blink Vision as
+Home Assistant OS on a Pi 5 (8 GB, SSD) runs everything: the integration in Home Assistant, Camera Vision as
 an add-on. What matters for speed:
 
 - **Use sub-streams** for RTSP cameras and leave *frame width* at 640. The Pi 5 has no hardware H.264
@@ -253,7 +255,7 @@ an add-on. What matters for speed:
 
 ## Docker / Home Assistant Container
 
-The integration runs inside Home Assistant either way. Without the Supervisor, run Blink Vision as a
+The integration runs inside Home Assistant either way. Without the Supervisor, run Camera Vision as a
 container on the same machine or network:
 
 ```sh
@@ -263,7 +265,7 @@ docker run -d --name blink-vision --restart unless-stopped \
   -e BLINK_VISION_TOKEN="$(openssl rand -base64 32)" blink-vision
 ```
 
-Then **Add integration → Blink Instant Events → Blink Vision address**: `http://<host>:8000` and the token.
+Then **Add integration → Local Camera Vision → Camera Vision address**: `http://<host>:8000` and the token.
 Publish the port only where Home Assistant can reach it: `127.0.0.1` works when Home Assistant runs
 with host networking on the same machine (the usual setup); otherwise bind your LAN address and firewall
 it. Never expose it to the internet. Thresholds can be set in `/data/options.json` (same keys as the add-on options).
@@ -278,7 +280,7 @@ it. Never expose it to the internet. Thresholds can be set in `/data/options.jso
   protocols, never files or other URL schemes.
 - **TLS**: Blink's live-view connection checks the server's certificate (blinkpy turns that off; this
   integration doesn't).
-- **Blink Vision** answers only with its token (except `/health`), has no published ports as an add-on,
+- **Camera Vision** answers only with its token (except `/health`), has no published ports as an add-on,
   keeps faces in its own `/data` (mode 0700, included in Home Assistant backups — encrypt your backups),
   and only admins can teach, forget or see enrolled faces.
 - Live-view players use short-lived per-camera tokens; detection pictures use signed links that expire.
@@ -318,7 +320,7 @@ it. Never expose it to the internet. Thresholds can be set in `/data/options.jso
 
 `pytest` runs the integration's tests, including local cameras end to end against a synthetic RTSP
 camera (ffmpeg encoding a moving test picture, served over RTSP) while Blink, its push client and every
-host but the mocked Blink Vision are forbidden: stream, motion, detection, sensors, saved clip,
+host but the mocked Camera Vision are forbidden: stream, motion, detection, sensors, saved clip,
 reconnection, a wrong login, the ONVIF-style camera path and the actions. `pytest blink_vision` tests the
 add-on (needs `opencv-python-headless` and `numpy`).
 
@@ -333,7 +335,7 @@ From Blink Live View Proxy: [docs/migration.md](docs/migration.md). Protocol not
   the push protocol research this integration builds on.
 - [blinkpy](https://github.com/fronzbot/blinkpy) (MIT) — Blink sign-in, devices and livestream.
 - [OpenCV Model Zoo](https://github.com/opencv/opencv_zoo) — YuNet (MIT), SFace (Apache-2.0) and
-  YOLOX-S (Apache-2.0) models, downloaded when the Blink Vision add-on is built.
+  YOLOX-S (Apache-2.0) models, downloaded when the Camera Vision add-on is built.
 - [firebase-messaging](https://github.com/sdb9696/firebase-messaging) (MIT) — FCM registration and
   MCS client, also used by Home Assistant's Ring integration.
 

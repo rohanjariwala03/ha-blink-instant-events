@@ -1,20 +1,23 @@
 # Upgrading to 0.7 (local cameras and the shared pipeline)
 
+**The integration is now called Local Camera Vision** (the add-on: Camera Vision). Only the displayed names
+changed; the domain `blink_instant_events`, the add-on slug `blink_vision`, entity ids, actions and URLs stay.
+
 Nothing to do for a working Blink setup: entities, entity ids, events, actions and the HTTP API keep their
 names. What changes, and what to check:
 
-## Update the Blink Vision add-on with the integration
+## Update the Camera Vision add-on with the integration
 
-Blink Vision 0.2 requires a token on every call except `/health`. Update both, then:
+Camera Vision 0.2 requires a token on every call except `/health`. Update both, then:
 
-- **Home Assistant OS**: the add-on announces itself on start; accept **Blink Vision** under
+- **Home Assistant OS**: the add-on announces itself on start; accept **Camera Vision** under
   **Settings → Devices & services → Discovered**. Until you do, smart detection is off (the add-on refuses
   calls without the token).
-- **Add-on elsewhere (Docker)**: set `BLINK_VISION_TOKEN`, then either add **Blink Instant Events → Blink
-  Vision address**, or put the token in the Blink account's **Configure → Settings → Blink Vision token**
+- **Add-on elsewhere (Docker)**: set `BLINK_VISION_TOKEN`, then either add **Local Camera Vision → Camera
+  Vision address**, or put the token in the Blink account's **Configure → Settings → Camera Vision token**
   next to the address you already had.
 
-Integration 0.7 also works with Blink Vision 0.1 (no token) in the meantime.
+Integration 0.7 also works with Camera Vision 0.1 (no token) in the meantime.
 
 ## What's new on Blink cameras
 
@@ -36,7 +39,7 @@ New entities per camera: `binary_sensor.<camera>_person`, `_known_person`, `_unk
   live view (and the live look after motion) stops with "failed certificate verification" instead of
   connecting insecurely; please report it.
 - **More than one entry.** The integration now holds a Blink account (at most one) plus any number of
-  local cameras and a Blink Vision address. Old entries are Blink accounts; no migration step runs.
+  local cameras and a Camera Vision address. Old entries are Blink accounts; no migration step runs.
 
 ## For developers
 

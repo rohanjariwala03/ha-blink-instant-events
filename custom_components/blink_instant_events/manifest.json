@@ -1,6 +1,6 @@
 {
   "domain": "blink_instant_events",
-  "name": "Blink Instant Events",
+  "name": "Local Camera Vision",
   "after_dependencies": [
     "hassio",
     "media_source"

@@ -1,4 +1,4 @@
-"""Config flow: what to add (a Blink account, an RTSP camera, a Home Assistant camera, or where Blink Vision
+"""Config flow: what to add (a Blink account, an RTSP camera, a Home Assistant camera, or where Camera Vision
 runs), then that provider's own steps. Blink is email + password, then the 2FA PIN Blink sends; local cameras
 need no account anywhere."""
 
@@ -73,7 +73,7 @@ VISION_SCHEMA = vol.Schema(
 
 
 async def async_check_vision(hass: HomeAssistant, url: str, token: str | None) -> str | None:
-    """None if Blink Vision answers at `url` and accepts the token, else the error key."""
+    """None if Camera Vision answers at `url` and accepts the token, else the error key."""
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
         async with async_get_clientsession(hass).get(
@@ -261,10 +261,10 @@ class BlinkInstantEventsConfigFlow(ConfigFlow, domain=DOMAIN):
             ),
         )
 
-    # ------------------------------------------------------------ Blink Vision
+    # ------------------------------------------------------------ Camera Vision
 
     async def async_step_vision(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Where Blink Vision runs, when it wasn't found by itself (a container, another machine)."""
+        """Where Camera Vision runs, when it wasn't found by itself (a container, another machine)."""
         errors: dict[str, str] = {}
         if user_input is not None:
             url = user_input[CONF_VISION_URL].rstrip("/")
@@ -274,7 +274,7 @@ class BlinkInstantEventsConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = error
             else:
                 return self.async_create_entry(
-                    title="Blink Vision",
+                    title="Camera Vision",
                     data={
                         CONF_PROVIDER: PROVIDER_VISION,
                         CONF_VISION_URL: url,
@@ -299,7 +299,7 @@ class BlinkInstantEventsConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_hassio_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Use the add-on that announced itself."""
         if user_input is not None:
-            return self.async_create_entry(title="Blink Vision", data=self._discovered)
+            return self.async_create_entry(title="Camera Vision", data=self._discovered)
         return self.async_show_form(step_id="hassio_confirm")
 
 
@@ -313,7 +313,7 @@ class BlinkOptionsFlow(OptionsFlow):
         return self.async_show_menu(step_id="init", menu_options=["push_sign_in", "settings"])
 
     async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Snapshot after motion costs battery, so it is off until you turn it on. Blink Vision is found by itself."""
+        """Snapshot after motion costs battery, so it is off until you turn it on. Camera Vision is found by itself."""
         if user_input is not None:
             return self.async_create_entry(data=user_input)
         options = self.config_entry.options

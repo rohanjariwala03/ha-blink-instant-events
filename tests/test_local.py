@@ -1,7 +1,7 @@
 """Local cameras with no Blink account, no Firebase, no cloud: a synthetic RTSP camera end to end.
 
 ffmpeg plays the camera (an RTSP server in listen mode streaming a moving test picture). The only HTTP the
-integration may make is to Blink Vision, mocked here; Blink and FCM fail the test if anything touches them.
+integration may make is to Camera Vision, mocked here; Blink and FCM fail the test if anything touches them.
 """
 
 from __future__ import annotations
@@ -112,7 +112,7 @@ async def _until(check: Callable[[], bool], seconds: float = 30) -> None:
 async def test_rtsp_camera_without_blink(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, rtsp_camera: FakeRtspCamera, no_cloud: None
 ) -> None:
-    """Stream → motion → Blink Vision → person/known sensors and event → saved clip; nothing else online."""
+    """Stream → motion → Camera Vision → person/known sensors and event → saved clip; nothing else online."""
     aioclient_mock.get(f"{VISION}/health", json={"ok": True})
     aioclient_mock.post(
         f"{VISION}/analyze",
@@ -282,7 +282,7 @@ async def test_addon_discovery(hass: HomeAssistant) -> None:
 
     def info(token: str) -> HassioServiceInfo:
         config = {"host": "local-blink-vision", "port": 8000, "token": token}
-        return HassioServiceInfo(config=config, name="Blink Vision", slug="local_blink_vision", uuid="abc")
+        return HassioServiceInfo(config=config, name="Camera Vision", slug="local_blink_vision", uuid="abc")
 
     with (
         patch(f"{PKG}.providers.vision.async_setup_entry", return_value=True),

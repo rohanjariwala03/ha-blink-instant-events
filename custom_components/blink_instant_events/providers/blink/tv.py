@@ -80,7 +80,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
         camera = hass.states.get(call.data["camera"])
         slug = camera and (camera.attributes.get("snapshot_of") or camera.attributes.get("proxy_slug"))
         if not slug or live.camera(slug) is None:
-            raise ServiceValidationError(f"{call.data['camera']} is not a Blink Instant Events camera")
+            raise ServiceValidationError(f"{call.data['camera']} is not a Local Camera Vision camera")
         tv = hass.states.get(call.data["media_player"])
         if call.data["only_if_on"] and (tv is None or tv.state in TV_OFF):
             return

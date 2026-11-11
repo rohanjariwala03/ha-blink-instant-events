@@ -118,7 +118,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlinkInstantConfigEntry)
     vision.live = live
     settings = BlinkSettings(hass, entry, coordinator, live)
     await settings.async_refresh()  # not fatal: the setting entities stay unavailable until Blink answers
-    await vision.async_start()  # not fatal either: smart detection stays off until Blink Vision answers
+    await vision.async_start()  # not fatal either: smart detection stays off until Camera Vision answers
     entry.runtime_data = BlinkData(coordinator, listener, clips, live, settings, vision)
     live.async_start()
     async_register_views(hass)

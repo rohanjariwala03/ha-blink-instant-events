@@ -2,6 +2,8 @@
 
 ## 0.7.0 — local cameras, one pipeline for every camera
 
+**Renamed: Local Camera Vision** (was Blink Instant Events; the add-on is **Camera Vision**, was Blink Vision). Only the names you see change: the domain `blink_instant_events`, entity ids, actions, the HTTP API and the add-on slug stay, so nothing needs setting up again.
+
 **Local cameras, no account or cloud.** Add an **RTSP camera** (address and optional login, checked by
 reading one frame), or **a camera already in Home Assistant** with its motion sensor (how ONVIF cameras
 come in, through Home Assistant's ONVIF integration). Nothing they do contacts Blink, Amazon or Google.
@@ -28,7 +30,7 @@ come in, through Home Assistant's ONVIF integration). Nothing they do contacts B
   `process_snapshot` (analyze any camera now, returns the detection). Device trigger **Recording saved**.
 - Face pictures in the people API are admin-only.
 
-**Blink Vision 0.2.0** (add-on): token on every call but `/health`, handed to Home Assistant through
+**Camera Vision 0.2.0** (add-on): token on every call but `/health`, handed to Home Assistant through
 Supervisor discovery (or `BLINK_VISION_TOKEN` for Docker); known / uncertain / unknown bands; enrolment
 refuses no face, two faces, small, unclear or blurry faces and look-alikes of someone else (409, `force`),
 skips duplicates, keeps at most 20 photos; thresholds are add-on options; `benchmark.py` times each stage.

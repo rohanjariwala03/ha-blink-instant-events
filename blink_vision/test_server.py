@@ -1,4 +1,4 @@
-"""Blink Vision without its models: tokens, the known/uncertain/unknown bands, enrolment checks, the HTTP API.
+"""Camera Vision without its models: tokens, the known/uncertain/unknown bands, enrolment checks, the HTTP API.
 
 The face detector is stood in for (`faces` returns rows and features the test chooses); OpenCV still does
 the decoding and the sharpness check. Run with the add-on's requirements: pytest blink_vision.

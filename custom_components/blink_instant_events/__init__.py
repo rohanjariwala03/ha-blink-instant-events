@@ -1,4 +1,4 @@
-"""Blink Instant Events: Blink cameras with instant push events, and smart detection on your own hardware."""
+"""Local Camera Vision: Blink cameras with instant push events, and smart detection on your own hardware."""
 
 from __future__ import annotations
 
