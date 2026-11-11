@@ -289,6 +289,8 @@ async def test_addon_discovery(hass: HomeAssistant) -> None:
     ):
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_HASSIO}, data=info("t1"))
         assert result["step_id"] == "hassio_confirm"
+        flow = hass.config_entries.flow.async_get(result["flow_id"])
+        assert flow["context"]["title_placeholders"] == {"name": "Camera Vision"}
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
         assert result["type"] is FlowResultType.CREATE_ENTRY
         assert result["data"] == {

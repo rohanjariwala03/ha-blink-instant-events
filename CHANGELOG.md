@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.2
+
+- **Fix: Blink live view (and the live look after motion) failed** with "Blink's live-view server failed
+  certificate verification: self-signed certificate". Blink's live-view servers present Blink's own
+  self-signed certificate (`*.immedia-semi.com`, valid until 2039), the same on every server, addressed by
+  IP, so the public-CA check added in 0.6.1 could never pass. Live view now trusts exactly that certificate
+  and nothing else: still verified, unlike blinkpy, which doesn't check at all. Tested against Blink's
+  servers; a different self-signed certificate is refused.
+- The discovered add-on card says **Camera Vision** instead of `blink_instant_events`.
+
 ## 0.7.1
 
 - **Fix: Blink accounts failed to load in 0.7.0** with `TypeError: 'method' object is not subscriptable`.

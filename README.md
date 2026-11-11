@@ -278,8 +278,8 @@ it. Never expose it to the internet. Thresholds can be set in `/data/options.jso
   Home Assistant container could read.
 - **RTSP addresses** must be `rtsp://` or `rtsps://` with a valid host; ffmpeg may only open RTSP's own
   protocols, never files or other URL schemes.
-- **TLS**: Blink's live-view connection checks the server's certificate (blinkpy turns that off; this
-  integration doesn't).
+- **TLS**: Blink's live-view servers present Blink's own self-signed certificate. blinkpy turns checking off;
+  this integration pins that certificate and trusts nothing else for live view, so an impostor server is refused.
 - **Camera Vision** answers only with its token (except `/health`), has no published ports as an add-on,
   keeps faces in its own `/data` (mode 0700, included in Home Assistant backups — encrypt your backups),
   and only admins can teach, forget or see enrolled faces.

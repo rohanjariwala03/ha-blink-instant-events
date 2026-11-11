@@ -190,10 +190,30 @@ async def test_live_view_end_to_end(
     assert b"ftyp" in (await resp.read())[:16]
 
 
-def test_live_view_verifies_the_server() -> None:
-    """blinkpy connects with checks off; ours requires a valid certificate for the server's name or IP."""
+def test_live_view_trusts_only_blinks_certificate() -> None:
+    """blinkpy connects with checks off; ours requires Blink's own certificate and trusts nothing else."""
     context = liveview.tls_context()
-    assert context.verify_mode == ssl.CERT_REQUIRED and context.check_hostname
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    anchors = [dict(field[0] for field in ca["subject"]) for ca in context.get_ca_certs()]
+    assert anchors == [anchors[0]] and anchors[0]["commonName"] == "*.immedia-semi.com"
+    assert anchors[0]["organizationalUnitName"] == "Blink"
+
+
+def test_other_self_signed_certificate_is_refused(tmp_path: Path) -> None:
+    """A real TLS handshake (in memory) with someone else's self-signed certificate fails verification."""
+    server_context = _tls_context(tmp_path)
+    client_in, client_out, server_in, server_out = (ssl.MemoryBIO() for _ in range(4))
+    client = liveview.tls_context().wrap_bio(client_in, client_out)
+    server = server_context.wrap_bio(server_in, server_out, server_side=True)
+    with pytest.raises(ssl.SSLCertVerificationError, match="self-signed certificate"):
+        for _ in range(10):
+            for side in (client, server):
+                try:
+                    side.do_handshake()
+                except ssl.SSLWantReadError:
+                    pass
+            server_in.write(client_out.read())
+            client_in.write(server_out.read())
 
 
 async def test_untrusted_server_is_refused(tmp_path: Path) -> None:

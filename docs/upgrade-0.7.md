@@ -35,9 +35,10 @@ New entities per camera: `binary_sensor.<camera>_person`, `_known_person`, `_unk
 - **Signed image links** in detection events last 24 hours (were 2 days), since they are stored in history.
 - **Face pictures** (`GET /api/blink_instant_events/people/<name>.jpg`) are admin-only, like teaching and
   forgetting. Listing names is unchanged.
-- **Live view** verifies Blink's TLS certificate. If Blink's live-view server ever fails verification,
-  live view (and the live look after motion) stops with "failed certificate verification" instead of
-  connecting insecurely; please report it.
+- **Live view** is pinned to Blink's own live-view certificate (0.7.2; 0.7.0 and 0.7.1 checked it against
+  public CAs, which Blink's self-signed certificate can't pass, so live view failed). If Blink ever replaces
+  that certificate, live view stops with "failed certificate verification" instead of connecting
+  insecurely; please report it.
 - **More than one entry.** The integration now holds a Blink account (at most one) plus any number of
   local cameras and a Camera Vision address. Old entries are Blink accounts; no migration step runs.
 
