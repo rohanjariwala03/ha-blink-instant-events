@@ -289,6 +289,7 @@ class BlinkInstantEventsConfigFlow(ConfigFlow, domain=DOMAIN):
         url = f"http://{config['host']}:{config['port']}"
         await self.async_set_unique_id(discovery_info.uuid)
         self._abort_if_unique_id_configured(updates={CONF_VISION_URL: url, CONF_VISION_TOKEN: config.get("token", "")})
+        self.context["title_placeholders"] = {"name": "Camera Vision"}  # the Discovered card's title
         self._discovered = {
             CONF_PROVIDER: PROVIDER_VISION,
             CONF_VISION_URL: url,
