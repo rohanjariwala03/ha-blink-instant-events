@@ -28,20 +28,13 @@ jobs:
 
   tests:
     runs-on: ubuntu-latest
+    # Debian's image and package servers: on 2026-11-11 the runners could not reach Ubuntu's mirrors.
+    container: python:3.14
     # A normal run takes about 2 minutes; stop a hung one instead of waiting GitHub's 6 hours.
     timeout-minutes: 7
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.14"
-          cache: pip
-          cache-dependency-path: requirements_test.txt
-      - name: Install ffmpeg
-        # On 2026-11-11 the runners' Ubuntu mirrors stopped answering over plain HTTP; HTTPS still worked.
-        run: |
-          sudo grep -rlE 'http://[a-z.]*ubuntu\.com' /etc/apt | xargs -r sudo sed -i -E 's#http://([a-z.]*ubuntu\.com)#https://\1#g'
-          sudo timeout 150 sh -c 'apt-get update && apt-get install -y --no-install-recommends ffmpeg'
+      - run: timeout 150 sh -c 'apt-get update && apt-get install -y --no-install-recommends ffmpeg'
       - run: pip install -r requirements_test.txt ruff
       - run: ruff check custom_components blink_vision tests
       - run: ruff format --check custom_components blink_vision tests
