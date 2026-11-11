@@ -52,7 +52,7 @@ class BlinkDetectionImage(BlinkCameraEntity, ImageEntity):
 
     @property
     def _row(self) -> dict[str, Any] | None:
-        return self._vision.latest(self._slug)
+        return self._vision.pipeline.latest(self._vision.entry.entry_id, self._slug)
 
     @property
     def image_last_updated(self) -> datetime | None:
@@ -75,7 +75,7 @@ class BlinkDetectionImage(BlinkCameraEntity, ImageEntity):
         row = self._row
         if row is None:
             return None
-        path = self._vision.image_path(row["id"])
+        path = self._vision.pipeline.image_path(row["id"])
         return await self.hass.async_add_executor_job(lambda: path.read_bytes() if path.is_file() else None)
 
     async def async_added_to_hass(self) -> None:

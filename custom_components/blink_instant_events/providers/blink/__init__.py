@@ -87,7 +87,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlinkInstantConfigEntry)
 
     ffmpeg = get_ffmpeg_manager(hass).binary
     clips = Clips(hass, blink, ffmpeg)
-    vision = Vision(hass, entry, coordinator, clips, ffmpeg)
+    vision = Vision(hass, entry, coordinator, clips)
 
     @callback
     def on_push(camera_id: str, event_type: str) -> None:

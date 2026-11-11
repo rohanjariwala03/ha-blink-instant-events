@@ -15,6 +15,7 @@ CONF_FCM = "fcm"
 CONF_PUSH_AUTH = "push_auth"  # the Android-client session Blink pushes to
 CONF_SNAPSHOT_AFTER_MOTION = "snapshot_after_motion"
 CONF_VISION_URL = "vision_url"
+CONF_VISION_TOKEN = "vision_token"
 CONF_LIVE_LOOK = "live_look"  # no clips (no Blink subscription): read a few seconds of live view after a push
 
 # What blinkpy and Blink's odd answers raise; reported as 502 (or a failed update) rather than escaping as 500.

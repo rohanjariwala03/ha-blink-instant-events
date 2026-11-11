@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .const import PROVIDER_BLINK
-from .providers import platform
 from .providers.blink import camera as blink
+from .providers.registry import platform
 
 async_setup_entry = platform({PROVIDER_BLINK: blink.async_setup_entry})
