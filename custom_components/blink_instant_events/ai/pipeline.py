@@ -326,9 +326,19 @@ class Pipeline:
         return split_jpegs(out)
 
     async def async_analyze(
-        self, source: Source, key: str, jpegs: list[bytes], created: datetime, *, empty: str | None = None
+        self,
+        source: Source,
+        key: str,
+        jpegs: list[bytes],
+        created: datetime,
+        *,
+        empty: str | None = None,
+        drop_parked_vehicles: bool = True,
     ) -> dict[str, Any]:
-        """Analyze one event's frames, store and announce the detection. `empty` replaces "Nothing found"."""
+        """Analyze one event's frames, store and announce the detection. `empty` replaces "Nothing found".
+
+        Asked for by hand (process_snapshot), parked vehicles are reported too; they are remembered either way.
+        """
         jpegs = list(dict.fromkeys(jpegs))  # a still camera sends the same picture more than once
         if not jpegs or self.url is None:
             raise RuntimeError("no frames" if not jpegs else "Camera Vision is not reachable")
@@ -346,7 +356,8 @@ class Pipeline:
                     frames.append(await resp.json())
             camera = f"{source.entry_id}/{source.slug}"
             seen = vehicle_boxes(frames)
-            drop_parked(frames, self.parked.get(camera, []))
+            if drop_parked_vehicles:
+                drop_parked(frames, self.parked.get(camera, []))
             self.parked[camera] = seen
             best = best_frame(frames)
             image = await self.hass.async_add_executor_job(annotate, jpegs[best], frames[best])

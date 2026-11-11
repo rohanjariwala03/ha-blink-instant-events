@@ -360,4 +360,8 @@ async def test_face_and_snapshot_actions(
         found = await hass.services.async_call(
             DOMAIN, "process_snapshot", {"camera": "camera.door"}, blocking=True, return_response=True
         )
+        again = await hass.services.async_call(
+            DOMAIN, "process_snapshot", {"camera": "camera.door"}, blocking=True, return_response=True
+        )
     assert found["summary"] == "A vehicle" and found["labels"] == ["vehicle"]
+    assert again["labels"] == ["vehicle"]  # asked by hand: a parked car is still reported

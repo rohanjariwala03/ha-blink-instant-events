@@ -95,7 +95,9 @@ def async_setup_services(hass: HomeAssistant) -> None:
         source = Source("", "camera", camera, slugify(camera), state.name if state else camera, "local")
         now = dt_util.utcnow()
         try:
-            row = await pipeline.async_analyze(source, detection_key(camera, now.isoformat()), [picture], now)
+            row = await pipeline.async_analyze(
+                source, detection_key(camera, now.isoformat()), [picture], now, drop_parked_vehicles=False
+            )
         except (ClientError, RuntimeError) as err:
             raise HomeAssistantError(f"Could not analyze {camera}: {err}") from err
         return {k: v for k, v in row.items() if k not in ("entry_id",)}
