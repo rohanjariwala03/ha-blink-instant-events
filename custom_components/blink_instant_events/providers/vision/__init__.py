@@ -8,6 +8,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
 from ...ai.pipeline import async_start_pipeline, get_pipeline
+from ...const import CONF_VISION_URL
 
 PLATFORMS: list[Platform] = []
 
@@ -24,6 +25,8 @@ async def _async_reprobe(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Probe again without this address."""
-    hass.async_create_task(get_pipeline(hass).async_probe())
+    """Stop using this address; the next probe (any other entry's) finds whatever else is configured."""
+    pipeline = get_pipeline(hass)
+    if pipeline.url == entry.data.get(CONF_VISION_URL, "").rstrip("/"):
+        pipeline.url = pipeline.token = None
     return True

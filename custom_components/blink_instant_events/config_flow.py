@@ -328,6 +328,9 @@ class BlinkOptionsFlow(OptionsFlow):
                     vol.Optional(
                         CONF_VISION_URL, description={"suggested_value": options.get(CONF_VISION_URL)}
                     ): vol.All(str, vol.Match(r"^https?://\S+$")),
+                    vol.Optional(
+                        CONF_VISION_TOKEN, description={"suggested_value": options.get(CONF_VISION_TOKEN)}
+                    ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
                 }
             ),
         )

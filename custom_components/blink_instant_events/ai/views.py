@@ -86,7 +86,8 @@ class PersonView(HomeAssistantView):
         _admin(request, "teach faces")
         if not 0 < (request.content_length or 0) <= MAX_PHOTO:
             raise web.HTTPRequestEntityTooLarge(max_size=MAX_PHOTO, actual_size=request.content_length or 0)
-        return await to_vision(request, "POST", f"/people/{quote(name)}", await request.read())
+        force = "?force=1" if request.query.get("force") == "1" else ""
+        return await to_vision(request, "POST", f"/people/{quote(name)}{force}", await request.read())
 
     async def delete(self, request: web.Request, name: str) -> web.Response:
         """Forget this person."""

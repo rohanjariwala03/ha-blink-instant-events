@@ -271,3 +271,30 @@ def _jpeg() -> bytes:
     out = io.BytesIO()
     PILImage.new("RGB", (64, 48), (90, 120, 200)).save(out, "JPEG")
     return out.getvalue()
+
+
+async def test_addon_discovery(hass: HomeAssistant) -> None:
+    """The add-on announces itself with its token; confirming makes the Vision entry; a re-announce updates it."""
+    from homeassistant.config_entries import SOURCE_HASSIO  # noqa: PLC0415
+    from homeassistant.helpers.service_info.hassio import HassioServiceInfo  # noqa: PLC0415
+
+    def info(token: str) -> HassioServiceInfo:
+        config = {"host": "local-blink-vision", "port": 8000, "token": token}
+        return HassioServiceInfo(config=config, name="Blink Vision", slug="local_blink_vision", uuid="abc")
+
+    with (
+        patch(f"{PKG}.providers.vision.async_setup_entry", return_value=True),
+    ):
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_HASSIO}, data=info("t1"))
+        assert result["step_id"] == "hassio_confirm"
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["data"] == {
+            "provider": "vision",
+            "vision_url": "http://local-blink-vision:8000",
+            "vision_token": "t1",
+        }
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_HASSIO}, data=info("t2"))
+        await hass.async_block_till_done()  # the update reloads the entry
+    assert result["type"] is FlowResultType.ABORT
+    assert hass.config_entries.async_entries(DOMAIN)[0].data["vision_token"] == "t2"
