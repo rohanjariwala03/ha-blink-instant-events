@@ -49,6 +49,7 @@ IMAGE_TTL = timedelta(hours=24)  # how long the signed image link in an event (a
 CONFIRM_FRAMES = 2  # frames a name must match in before it counts as known
 STRONG_MATCH = 0.5  # SFace cosine similarity at which one frame is enough (the add-on's threshold is 0.363)
 PETS = {"cat", "dog"}
+PARKED_IOU = 0.6  # a vehicle box overlapping one from the camera's previous detection this much is parked
 COLORS = {
     "known": (46, 204, 113),
     "uncertain": (255, 59, 48),
@@ -80,6 +81,8 @@ def identities(frames: list[dict[str, Any]]) -> tuple[list[str], list[str], int,
                 best[name] = max(best.get(name, 0.0), float(face.get("similarity", 1.0)))
             elif match == "uncertain" and face.get("candidate"):
                 uncertain.add(face["candidate"])
+            elif match == "unclear":
+                continue  # too blurred to say; the person box still counts (and unknown_person, if no name)
             else:
                 unknown_here += 1
         unknown = max(unknown, unknown_here)
@@ -121,6 +124,40 @@ def summarize(frames: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _norm(box: list[int], frame: dict[str, Any]) -> tuple[float, float, float, float]:
+    """A box as fractions of its frame, so a clip and a live view of one camera compare."""
+    width, height = frame.get("width") or 1, frame.get("height") or 1
+    x, y, w, h = box
+    return x / width, y / height, w / width, h / height
+
+
+def _iou(a: tuple[float, ...], b: tuple[float, ...]) -> float:
+    left, top = max(a[0], b[0]), max(a[1], b[1])
+    right, bottom = min(a[0] + a[2], b[0] + b[2]), min(a[1] + a[3], b[1] + b[3])
+    inter = max(0.0, right - left) * max(0.0, bottom - top)
+    union = a[2] * a[3] + b[2] * b[3] - inter
+    return inter / union if union else 0.0
+
+
+def vehicle_boxes(frames: list[dict[str, Any]]) -> list[tuple[float, float, float, float]]:
+    """Every vehicle in these frames, as fractions of the frame."""
+    return [_norm(obj["box"], frame) for frame in frames for obj in frame["objects"] if obj["group"] == "vehicle"]
+
+
+def drop_parked(frames: list[dict[str, Any]], parked: list[tuple[float, float, float, float]]) -> None:
+    """Remove vehicles standing where one stood in the camera's previous detection: parked, not news.
+
+    ponytail: remembered in memory per camera, so the first detection after a restart still reports a
+    parked car once, and a car that leaves and returns to the same spot between detections is missed.
+    """
+    for frame in frames:
+        frame["objects"] = [
+            obj
+            for obj in frame["objects"]
+            if obj["group"] != "vehicle" or all(_iou(_norm(obj["box"], frame), box) < PARKED_IOU for box in parked)
+        ]
+
+
 def best_frame(frames: list[dict[str, Any]]) -> int:
     """The frame that shows the most: the most faces, then the biggest ones, then people, then anything."""
 
@@ -148,7 +185,15 @@ def annotate(jpeg: bytes, frame: dict[str, Any]) -> bytes:
         match = _match(face)
         color = COLORS["known" if match == "known" else "uncertain" if match == "uncertain" else "face"]
         draw.rectangle((x, y, x + w, y + h), outline=color, width=width)
-        label = face["name"] if match == "known" else f"{face['candidate']}?" if face.get("candidate") else "Unknown"
+        label = (
+            face["name"]
+            if match == "known"
+            else f"{face['candidate']}?"
+            if face.get("candidate")
+            else "Unclear"
+            if match == "unclear"
+            else "Unknown"
+        )
         left, top, right, bottom = draw.textbbox((x, y), label, font_size=font_size)
         draw.rectangle((left - 4, top - (bottom - top) - 8, right + 4, top - 2), fill=color)
         draw.text((x, top - (bottom - top) - 6), label, fill=(0, 0, 0), font_size=font_size)
@@ -189,6 +234,7 @@ class Pipeline:
         self.url: str | None = None
         self.token: str | None = None
         self.rows: dict[str, dict[str, Any]] = {}  # detection id -> detection
+        self.parked: dict[str, list[tuple[float, float, float, float]]] = {}  # camera -> its last vehicles
         self.root = Path(hass.config.cache_path(DOMAIN, "detections"))
         self._store: Store[list[dict[str, Any]]] = Store(hass, 1, f"{DOMAIN}.detections")
         # ponytail: one analysis at a time across all cameras; the add-on runs one model at a time anyway.
@@ -298,6 +344,10 @@ class Pipeline:
                         raise RuntimeError("Camera Vision refused the token; set it up again")
                     resp.raise_for_status()
                     frames.append(await resp.json())
+            camera = f"{source.entry_id}/{source.slug}"
+            seen = vehicle_boxes(frames)
+            drop_parked(frames, self.parked.get(camera, []))
+            self.parked[camera] = seen
             best = best_frame(frames)
             image = await self.hass.async_add_executor_job(annotate, jpegs[best], frames[best])
             await self.hass.async_add_executor_job(self._save_image, key, image)

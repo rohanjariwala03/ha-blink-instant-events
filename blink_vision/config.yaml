@@ -1,5 +1,5 @@
 name: Camera Vision
-version: 0.2.0
+version: 0.2.1
 slug: blink_vision
 description: Local face recognition and person, vehicle and animal detection for Local Camera Vision
 url: https://github.com/rohanjariwala03/ha-local-camera-vision/tree/main/blink_vision
@@ -22,6 +22,7 @@ options:
   min_face: 32
   min_enrol_face: 80
   min_sharpness: 60
+  min_detect_sharpness: 25
 schema:
   same_person: float(0.2,0.9)
   uncertain_from: float(0.1,0.9)
@@ -30,3 +31,4 @@ schema:
   min_face: int(16,256)
   min_enrol_face: int(32,512)
   min_sharpness: float(0,1000)
+  min_detect_sharpness: float(0,1000)

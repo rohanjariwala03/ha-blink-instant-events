@@ -16,13 +16,14 @@ from blinkpy.auth import UnauthorizedError
 from blinkpy.blinkpy import Blink
 from blinkpy.camera import BlinkCamera
 from blinkpy.sync_module import BlinkSyncModule
+from requests.structures import CaseInsensitiveDict
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.util import dt as dt_util
+from homeassistant.util import dt as dt_util, slugify
 
 from ...const import (
     AUTO_SNAPSHOT_MIN_SECONDS,
@@ -41,6 +42,8 @@ SYNCLESS_TYPES = ("BlinkOwl", "BlinkLotus")
 # A new snapshot's URL can arrive before the image behind it downloads (seen on a Mini).
 SNAPSHOT_RETRIES = 3
 SNAPSHOT_RETRY_SECONDS = 2
+# One failed poll (a throttled answer, a token renewal that timed out) keeps the last state this long.
+STALE_AFTER = timedelta(minutes=20)
 
 
 def busy(answer: Any) -> bool:
@@ -52,6 +55,31 @@ def drop_cached_videos(blink: Blink) -> None:
     """Stop blinkpy downloading every camera's newest clip on each refresh; nothing here uses it."""
     for camera in blink.cameras.values():
         camera._cached_video = b""  # noqa: SLF001
+
+
+def camera_slug(camera: BlinkCamera) -> str:
+    """The camera's name as the HTTP API and the app spell it, e.g. "front_door" (see index_cameras)."""
+    return getattr(camera, "slug", None) or slugify(camera.name)
+
+
+def index_cameras(blink: Blink) -> None:
+    """Every camera once, each with a URL name (``slug``) no other camera has.
+
+    blinkpy merges the systems' cameras by name, so a "Front door" in each of two systems left one; and
+    names such as "🚪" all slugify to "unknown". The second of a pair is keyed "<name> (<serial>)".
+    """
+    merged: CaseInsensitiveDict[BlinkCamera] = CaseInsensitiveDict({})
+    used: set[str] = set()
+    for sync in blink.sync.values():
+        for name, camera in dict(sync.cameras).items():
+            slug = slugify(name)
+            if slug in used or slug == "unknown":
+                slug = slugify(f"{name} {camera.serial or camera.camera_id}")
+            used.add(slug)
+            camera.slug = slug
+            merged[name if name not in merged else f"{name} ({camera.serial})"] = camera
+    if len(merged) >= len(blink.cameras):
+        blink.cameras = merged
 
 
 def sync_armed(sync: BlinkSyncModule) -> bool | None:
@@ -104,6 +132,7 @@ class BlinkCoordinator(DataUpdateCoordinator[None]):
                 self.blink.setup_urls()
                 if not await self.blink.setup_post_verify():
                     raise RuntimeError("Blink did not list the cameras")
+                index_cameras(self.blink)
                 self.blink.last_refresh = int(dt_util.utcnow().timestamp())
             else:
                 drop_cached_videos(self.blink)
@@ -122,6 +151,17 @@ class BlinkCoordinator(DataUpdateCoordinator[None]):
         self.poll["interval"] = POLL_SECONDS
         self.update_interval = timedelta(seconds=POLL_SECONDS)
         self.last_success = dt_util.utcnow()
+
+    @property
+    def fresh(self) -> bool:
+        """The last poll worked, or one did recently and nothing since said the session is gone."""
+        if self.last_update_success:
+            return True
+        return (
+            self.poll["state"] == "backoff"
+            and self.last_success is not None
+            and dt_util.utcnow() - self.last_success < STALE_AFTER
+        )
 
     def _failed(self, state: str, err: Exception) -> None:
         failures = self.poll["failures"] + 1

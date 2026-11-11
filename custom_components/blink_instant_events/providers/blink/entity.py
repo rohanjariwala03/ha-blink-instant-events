@@ -7,21 +7,15 @@ from blinkpy.sync_module import BlinkSyncModule
 
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.util import slugify
 
 from ...ai.entities import Target
 from ...const import DOMAIN
-from .coordinator import BlinkCoordinator
+from .coordinator import BlinkCoordinator, camera_slug
 
 
 def hub_device_info(unique_id: str | None) -> DeviceInfo:
     """The account-level device the diagnostics entities sit on."""
     return DeviceInfo(identifiers={(DOMAIN, str(unique_id))}, manufacturer="Blink", name="Blink Instant Events")
-
-
-def camera_slug(camera: BlinkCamera) -> str:
-    """The camera's name as the HTTP API and the app spell it, e.g. "front_door"."""
-    return slugify(camera.name)
 
 
 def camera_device_info(camera: BlinkCamera) -> DeviceInfo:
@@ -64,12 +58,12 @@ class BlinkCameraEntity(CoordinatorEntity[BlinkCoordinator]):
 
     @property
     def listed(self) -> bool:
-        """The poll worked and Blink still lists the camera."""
-        return super().available and self.coordinator.camera(self._serial) is not None
+        """A recent poll worked and Blink still lists the camera."""
+        return self.coordinator.fresh and self.coordinator.camera(self._serial) is not None
 
     @property
     def available(self) -> bool:
-        """Unavailable when the poll failed, Blink stopped listing the camera, or Blink calls it offline."""
+        """Unavailable when polls have failed a while, Blink stopped listing the camera, or calls it offline."""
         return self.listed and self.camera.status != "offline"
 
 
@@ -99,5 +93,5 @@ class BlinkSyncEntity(CoordinatorEntity[BlinkCoordinator]):
 
     @property
     def available(self) -> bool:
-        """Unavailable when the poll failed or the network is gone."""
-        return super().available and self._network_id in self.coordinator.syncs()
+        """Unavailable when polls have failed for a while or the network is gone."""
+        return self.coordinator.fresh and self._network_id in self.coordinator.syncs()

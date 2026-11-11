@@ -118,21 +118,50 @@ async def test_motion_from_push(hass: HomeAssistant, setup_entry: MockConfigEntr
 async def test_poll_backoff_and_auth_failure(
     hass: HomeAssistant, setup_entry: MockConfigEntry, mock_blink: MagicMock
 ) -> None:
-    """Failures back off; a rejected session reports auth_failed and starts reauth."""
+    """Failures back off, keeping the last state for a while; a rejected session reports auth_failed."""
     coordinator = setup_entry.runtime_data.coordinator
+    switch = "switch.backyard_motion_detection"
     mock_blink.refresh.side_effect = AttributeError("'NoneType' object has no attribute 'json'")
     await coordinator.async_refresh()
     poll = hass.states.get(POLL).attributes
     assert (poll["state"], poll["failures"], poll["interval"]) == ("backoff", 1, 600)
-    assert hass.states.get("switch.backyard_motion_detection").state == "unavailable"
+    assert hass.states.get(switch).state == "on"  # one failed poll: last state kept
 
+    coordinator.last_success -= timedelta(minutes=21)
+    await coordinator.async_refresh()
+    assert hass.states.get(switch).state == "unavailable"  # failing for too long
+
+    coordinator.last_success += timedelta(minutes=21)
     mock_blink.refresh.side_effect = UnauthorizedError
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert hass.states.get(POLL).attributes["state"] == "auth_failed"
+    assert hass.states.get(switch).state == "unavailable"  # signed out: no stale state
     assert any(setup_entry.async_get_active_flows(hass, {"reauth"}))
 
     mock_blink.refresh.side_effect = None
     await coordinator.async_refresh()
     poll = hass.states.get(POLL).attributes
     assert (poll["state"], poll["failures"], poll["interval"]) == ("ok", 0, 300)
+
+
+def test_cameras_with_the_same_name_are_both_kept() -> None:
+    """Two systems' "Front door"s both stay, with different URL names; emoji names get one too."""
+    from types import SimpleNamespace
+
+    from requests.structures import CaseInsensitiveDict
+
+    from custom_components.blink_instant_events.providers.blink.coordinator import index_cameras
+    from custom_components.blink_instant_events.providers.blink.entity import camera_slug
+
+    def cam(name: str, serial: str) -> SimpleNamespace:
+        return SimpleNamespace(name=name, serial=serial, camera_id=serial)
+
+    home = SimpleNamespace(cameras=CaseInsensitiveDict({"Front door": cam("Front door", "A1"), "🚪": cam("🚪", "A2")}))
+    cabin = SimpleNamespace(
+        cameras=CaseInsensitiveDict({"front door": cam("front door", "B1"), "Küche": cam("Küche", "B2")})
+    )
+    blink = SimpleNamespace(sync={"home": home, "cabin": cabin}, cameras=CaseInsensitiveDict({}))
+    index_cameras(blink)
+    assert len(blink.cameras) == 4
+    assert sorted(camera_slug(c) for c in blink.cameras.values()) == ["a2", "front_door", "front_door_b1", "kuche"]

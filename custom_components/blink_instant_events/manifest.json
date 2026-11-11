@@ -25,5 +25,5 @@
     "blinkpy>=0.25.9",
     "firebase-messaging==0.4.5"
   ],
-  "version": "0.7.3"
+  "version": "0.7.4"
 }

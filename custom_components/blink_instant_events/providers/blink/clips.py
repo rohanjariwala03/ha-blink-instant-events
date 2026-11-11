@@ -31,6 +31,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import slugify
 
 from .api import BlinkAuth
+from .coordinator import camera_slug
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -93,9 +94,11 @@ class Clips:
         self._locks: dict[str, asyncio.Lock] = {}
         self._download_slot = asyncio.Semaphore(1)
 
-    def _slug(self, camera_name: str) -> str:
-        camera = self.blink.cameras.get(camera_name)
-        return slugify(camera.name if camera else camera_name)
+    def _slug(self, camera_name: str, device_id: Any = None, cameras: Any = None) -> str:
+        """The clip's camera by its id when Blink gives one (names can repeat across systems), else by name."""
+        by_id = {str(cam.camera_id): cam for cam in self.blink.cameras.values()}
+        camera = by_id.get(str(device_id)) or (self.blink.cameras if cameras is None else cameras).get(camera_name)
+        return camera_slug(camera) if camera else slugify(camera_name)
 
     async def async_list(
         self, source: str, camera: str | None, hours: float, pages: int, limit: int
@@ -129,7 +132,7 @@ class Clips:
                 clips.append(
                     {
                         "source": "cloud",
-                        "slug": self._slug(name),
+                        "slug": self._slug(name, item.get("device_id")),
                         "camera_name": name,
                         "created_at": parse_time(created),
                         "size": item.get("size"),
@@ -152,7 +155,7 @@ class Clips:
                 clips.append(
                     {
                         "source": "local",
-                        "slug": self._slug(item.name),
+                        "slug": self._slug(item.name, cameras=sync.cameras),
                         "camera_name": item.name,
                         "created_at": created,
                         "size": item.size,

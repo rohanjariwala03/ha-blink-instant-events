@@ -7,7 +7,7 @@ pushes, a poll that shows a new clip does the same, just later. The looking itse
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -19,7 +19,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util, slugify
 
 from ...ai.pipeline import Pipeline, async_start_pipeline, detection_key, get_pipeline
-from ...const import BLINK_ERRORS, CONF_LIVE_LOOK, DOMAIN, PROVIDER_BLINK
+from ...const import BLINK_ERRORS, CONF_LIVE_LOOK, CONF_LIVE_LOOK_LIMIT, DEFAULT_LIVE_LOOK_LIMIT, DOMAIN, PROVIDER_BLINK
 from ..base import Source
 from .clips import Clips, clip_id
 from .coordinator import BlinkCoordinator
@@ -50,6 +50,7 @@ class Vision:
         self._lock = asyncio.Lock()  # scans of this account never race each other
         self._watchers: dict[str, asyncio.Task[None]] = {}
         self._records: dict[str, str] = {}  # camera serial -> last_record seen, to notice new clips on a poll
+        self._looks: dict[str, tuple[date, int]] = {}  # camera serial -> (day, live looks that day)
         self._started = dt_util.utcnow()
 
     @property
@@ -134,11 +135,26 @@ class Vision:
                     _LOGGER.warning("Could not analyze the %s clip from %s: %s", camera_name, clip["created_at"], err)
             return len(new)
 
+    def _within_budget(self, camera: BlinkCamera) -> bool:
+        """Count one live look today; False once the camera's daily limit (0 = none) is used up."""
+        limit = int(self.entry.options.get(CONF_LIVE_LOOK_LIMIT, DEFAULT_LIVE_LOOK_LIMIT))
+        today = dt_util.now().date()
+        day, count = self._looks.get(camera.serial, (today, 0))
+        count = count if day == today else 0
+        self._looks[camera.serial] = (today, count + 1)
+        if limit and count >= limit:
+            if count == limit:
+                _LOGGER.info("%s used its %d live looks for today; no more until midnight", camera.name, limit)
+            return False
+        return True
+
     async def _look(self, camera: BlinkCamera) -> None:
         """No clips without a Blink subscription: watch a few seconds of live view and read that instead."""
         slug = camera_slug(camera)
         if self.live is None or slug in self.live.sessions:
             return  # someone is already watching it
+        if not self._within_budget(camera):
+            return
         created = dt_util.utcnow()
         try:
             session = await self.live.get_or_start(slug, "")

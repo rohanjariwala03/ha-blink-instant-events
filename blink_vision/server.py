@@ -55,6 +55,9 @@ SETTINGS: dict[str, float] = {
     "min_enrol_face": 80,
     "min_enrol_score": 0.9,
     "min_sharpness": 60.0,  # variance of the Laplacian of the face crop; blurrier photos are refused
+    # In detection, an unmatched face blurrier than this is "unclear", not "unknown": a blurred frame of
+    # someone you know must not raise an unknown-person alert. Video frames are softer than photos.
+    "min_detect_sharpness": 25.0,
     "same_person": 0.363,  # SFace cosine similarity threshold (OpenCV's recommendation)
     "uncertain_from": 0.30,
     "object_score": 0.45,
@@ -244,9 +247,12 @@ def identify(feature: np.ndarray) -> dict[str, Any]:
 def analyze(image: np.ndarray) -> dict:
     with lock:
         found_faces, found_objects = faces(image), objects(image)
-    named = [
-        identify(feature) | {"score": round(float(row[-1]), 3), "box": box(*row[:4])} for row, feature in found_faces
-    ]
+    named = []
+    for row, feature in found_faces:
+        face = identify(feature) | {"score": round(float(row[-1]), 3), "box": box(*row[:4])}
+        if face["match"] != "known" and sharpness(image, row) < SETTINGS["min_detect_sharpness"]:
+            face |= {"match": "unclear", "candidate": None}
+        named.append(face)
     height, width = image.shape[:2]
     return {"width": width, "height": height, "objects": found_objects, "faces": named}
 

@@ -165,6 +165,7 @@ def mock_blink() -> Generator[MagicMock]:
             ),
         }
     )
+    sync.cameras = CaseInsensitiveDict(dict(blink.cameras))
     # Camera settings, read from Blink's cloud: night vision on auto (code 2).
     settings = AsyncMock(return_value={"camera": [{"illuminator_enable": 2}]})
     with (

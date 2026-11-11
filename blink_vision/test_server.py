@@ -69,6 +69,16 @@ def test_bands() -> None:
     assert server.identify(STRANGER)["match"] == "unknown"
 
 
+def test_blurry_unmatched_face_is_unclear(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A blurred face that matches nobody is "unclear", not "unknown"; a known match stays known."""
+    server.known["Rohan"] = ROHAN[np.newaxis]
+    monkeypatch.setattr(server, "objects", lambda image: [])
+    use_faces(monkeypatch, (row(), STRANGER), (row(x=150), CLOSE_TO_ROHAN))
+    blurred = [face["match"] for face in server.analyze(photo(sharp=False))["faces"]]
+    assert blurred == ["unclear", "known"]
+    assert [face["match"] for face in server.analyze(photo())["faces"]] == ["unknown", "known"]
+
+
 def test_enrolment_quality(monkeypatch: pytest.MonkeyPatch) -> None:
     """No face, two faces, small, unclear or blurry photos are refused with a reason; nothing is stored."""
     for found, image, reason in [

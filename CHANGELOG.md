@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.4
+
+- **Blink entities ride out a failed poll.** One throttled answer or a token renewal that timed out
+  no longer makes every Blink entity unavailable: the last state stays for up to 20 minutes while polls
+  retry. A signed-out session still goes unavailable at once and asks you to sign in. (#39)
+- **Parked cars stop counting as vehicles.** A vehicle standing where one stood in the camera's
+  previous detection is left out, so a car in the driveway no longer turns `vehicle` on with every
+  motion. A car arriving, leaving or parked somewhere new still counts. (#34)
+- **A blurred face no longer makes a known visitor "unknown".** Camera Vision 0.2.1 calls an unmatched
+  face that is too blurred to read *unclear*, and unclear faces are left out of who was seen; a person
+  nobody recognized still turns `unknown_person` on. New add-on option `min_detect_sharpness` (25). (#35)
+- **Cameras with the same name in two Blink systems are both kept** (blinkpy merged them by name and
+  dropped one), each with its own name in the HTTP API; names such as "🚪" get one too. Clips are
+  matched to their camera by id where Blink gives one. (#37, #41)
+- **Live looks have a daily limit per camera** (Configure → Settings, 30 by default, 0 for none), so a
+  busy street can't drain a battery camera. (#29)
+- A refused Blink sign-in says Blink refused it, and that Blink may be refusing outside sign-ins for a
+  while, instead of only "Invalid authentication". (#42)
+
 ## 0.7.3
 
 - First tagged release: HACS shows version numbers and release notes instead of commit ids.
