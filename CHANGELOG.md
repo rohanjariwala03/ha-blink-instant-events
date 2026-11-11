@@ -8,6 +8,7 @@
   IP, so the public-CA check added in 0.6.1 could never pass. Live view now trusts exactly that certificate
   and nothing else: still verified, unlike blinkpy, which doesn't check at all. Tested against Blink's
   servers; a different self-signed certificate is refused.
+- The discovered add-on card says **Camera Vision** instead of `blink_instant_events`.
 
 ## 0.7.1
 
