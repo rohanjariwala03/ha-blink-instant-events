@@ -20,7 +20,7 @@ from homeassistant.util import dt as dt_util
 from .const import BLINK_ERRORS, DOMAIN
 from .providers.blink.clips import API, Clips, public_clip
 from .providers.blink.entity import camera_slug
-from .providers.blink.entry import loaded_blink_entry
+from .providers.blink.entry import blink_entry_for, loaded_blink_entries
 
 DAYS = 7
 # "clip/<id>.mp4?<listing args>": the part after "clip/" is the clip's path under the clips API.
@@ -42,10 +42,14 @@ class BlinkClips(MediaSource):
         super().__init__(DOMAIN)
         self.hass = hass
 
-    def _clips(self) -> Clips:
-        if (entry := loaded_blink_entry(self.hass)) is None:
+    def _clips(self, slug: str | None = None) -> list[Clips]:
+        """Every account's clips, or the one with this camera."""
+        entries = loaded_blink_entries(self.hass)
+        if slug is not None and (entry := blink_entry_for(self.hass, slug)):
+            entries = [entry]
+        if not entries:
             raise BrowseError("No Blink account is loaded")
-        return entry.runtime_data.clips
+        return [entry.runtime_data.clips for entry in entries]
 
     async def async_resolve_media(self, item: MediaSourceItem) -> PlayMedia:
         """The clip's URL; Home Assistant signs it for the player."""
@@ -58,8 +62,7 @@ class BlinkClips(MediaSource):
         identifier = item.identifier or ""
         if identifier.startswith("camera/"):
             return await self._camera(identifier.removeprefix("camera/") or None)
-        clips = self._clips()
-        cameras = [(camera_slug(cam), cam.name) for cam in clips.blink.cameras.values()]
+        cameras = [(camera_slug(cam), cam.name) for clips in self._clips() for cam in clips.blink.cameras.values()]
         return _folder(
             "",
             self.name,
@@ -67,12 +70,15 @@ class BlinkClips(MediaSource):
         )
 
     async def _camera(self, slug: str | None) -> BrowseMediaSource:
-        clips = self._clips()
+        accounts = self._clips(slug)
+        rows = []
         try:
-            rows = await clips.async_list(source="both", camera=slug, hours=DAYS * 24, pages=3, limit=100)
+            for clips in accounts:
+                rows += await clips.async_list(source="both", camera=slug, hours=DAYS * 24, pages=3, limit=100)
         except (UnauthorizedError, *BLINK_ERRORS) as err:
             raise BrowseError(f"Blink did not answer: {err}") from err
-        names = {camera_slug(cam): cam.name for cam in clips.blink.cameras.values()}
+        rows = sorted(rows, key=lambda clip: clip["created_at"], reverse=True)[:100]
+        names = {camera_slug(cam): cam.name for clips in accounts for cam in clips.blink.cameras.values()}
         children = []
         for clip in rows:
             row = public_clip(clip, {"hours": DAYS * 24, "pages": 3, "limit": 100}, cached=False)

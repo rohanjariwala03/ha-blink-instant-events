@@ -19,7 +19,7 @@ from homeassistant.util.unit_conversion import TemperatureConverter
 from ...const import BLINK_ERRORS, DOMAIN
 from . import controls
 from .clips import API as CLIPS_API, clip_id, public_clip
-from .entry import loaded_blink_entry
+from .entry import blink_entry_for, loaded_blink_entries, loaded_blink_entry
 from .liveview import TOKEN_TTL_SECONDS, LiveViews, control_row, ptt_supported, talk
 
 if TYPE_CHECKING:
@@ -51,18 +51,31 @@ def async_register_views(hass: HomeAssistant) -> None:
     hass.data[DOMAIN]["views"] = True
 
 
-def runtime(request: web.Request) -> BlinkData:
-    """The loaded account (one per Home Assistant)."""
-    if (entry := loaded_blink_entry(request.app["hass"])) is None:
+def runtime(request: web.Request, slug: str | None = None) -> BlinkData:
+    """The account with this camera, or the first one when no camera is named."""
+    hass = request.app["hass"]
+    entry = loaded_blink_entry(hass) if slug is None else blink_entry_for(hass, slug) or loaded_blink_entry(hass)
+    if entry is None:
         raise web.HTTPServiceUnavailable(text="No Blink account is loaded\n")
     return entry.runtime_data
+
+
+def accounts(request: web.Request, slug: str | None = None) -> list[BlinkData]:
+    """Every loaded account, or the one with this camera."""
+    if slug is not None:
+        return [runtime(request, slug)]
+    found = [entry.runtime_data for entry in loaded_blink_entries(request.app["hass"])]
+    if not found:
+        raise web.HTTPServiceUnavailable(text="No Blink account is loaded\n")
+    return found
 
 
 def blink_failed(request: web.Request, err: Exception) -> web.HTTPException:
     """A 503 (and Home Assistant's reauth prompt) when Blink signed us out, else a 502 with the reason."""
     if isinstance(err, UnauthorizedError):
-        if entry := loaded_blink_entry(request.app["hass"]):
-            entry.async_start_reauth(request.app["hass"])
+        # With several accounts the next poll of the signed-out one asks for the sign-in itself.
+        if len(entries := loaded_blink_entries(request.app["hass"])) == 1:
+            entries[0].async_start_reauth(request.app["hass"])
         return web.HTTPServiceUnavailable(text="Blink signed this session out; re-authenticate in Home Assistant\n")
     return web.HTTPBadGateway(text=f"Blink did not answer as expected: {err}\n")
 
@@ -95,27 +108,29 @@ class ClipsView(HomeAssistantView):
     name = "api:blink_instant_events:clips"
 
     async def get(self, request: web.Request) -> web.Response:
-        """List clips, newest first."""
-        data = runtime(request)
-        clips = data.clips
+        """List clips, newest first, from every account (or the named camera's)."""
         query = clip_query(request, {"both", "cloud", "local"})
+        found = accounts(request, query["camera"])
+        rows = []
         try:
-            rows = await clips.async_list(**query)
+            for data in found:
+                rows += [(data, clip) for clip in await data.clips.async_list(**query)]
         except (UnauthorizedError, *BLINK_ERRORS) as err:
             raise blink_failed(request, err) from err
+        rows.sort(key=lambda row: row[1]["created_at"], reverse=True)
         hass = request.app["hass"]
         args = {k: v for k, v in query.items() if k in ("hours", "pages", "limit")}
         listed = []
-        for clip in rows:
+        for data, clip in rows[: query["limit"]]:
             key = clip_id(clip)
-            cached = await hass.async_add_executor_job(clips.cached, key, ".jpg") is not None
+            cached = await hass.async_add_executor_job(data.clips.cached, key, ".jpg") is not None
             listed.append(public_clip(clip, args, cached) | {"detection": data.vision.pipeline.public(key)})
         return web.json_response(
             {
                 "count": len(listed),
                 "source": query["source"],
                 "hours": query["hours"],
-                "smart_detection": data.vision.enabled,
+                "smart_detection": any(data.vision.enabled for data in found),
                 "clips": listed,
             },
             headers=NO_STORE,
@@ -132,15 +147,9 @@ class ClipFileView(HomeAssistantView):
         """One clip or its first frame."""
         if not CLIP_ID.fullmatch(key):
             raise web.HTTPNotFound
-        clips = runtime(request).clips
-        hass = request.app["hass"]
         query = clip_query(request, {"cloud", "local"})
         try:
-            clip = None
-            if await hass.async_add_executor_job(clips.cached, key, f".{ext}") is None:
-                clip = await clips.async_find(key, query)
-                if clip is None:
-                    raise web.HTTPNotFound(text="Clip is no longer listed by Blink\n")
+            clips, clip = await _find_clip(request, key, ext, query)
             path = await (clips.async_clip if ext == "mp4" else clips.async_thumbnail)(key, clip)
         except LookupError as err:  # evicted from the cache between the check and the read
             raise web.HTTPNotFound(text="Clip left the cache; list clips again\n") from err
@@ -149,9 +158,22 @@ class ClipFileView(HomeAssistantView):
         return web.FileResponse(path, headers={**KEEP, "Content-Type": "video/mp4" if ext == "mp4" else "image/jpeg"})
 
 
+async def _find_clip(request: web.Request, key: str, ext: str, query: dict[str, Any]) -> tuple[Any, Any]:
+    """The account holding the clip: its cached file first, else whichever account still lists it."""
+    hass = request.app["hass"]
+    found = accounts(request, query["camera"])
+    for data in found:
+        if await hass.async_add_executor_job(data.clips.cached, key, f".{ext}") is not None:
+            return data.clips, None
+    for data in found:
+        if (clip := await data.clips.async_find(key, query)) is not None:
+            return data.clips, clip
+    raise web.HTTPNotFound(text="Clip is no longer listed by Blink\n")
+
+
 def live(request: web.Request, slug: str) -> LiveViews:
     """The live views, if this request may watch `slug`: Home Assistant auth or the camera's token."""
-    views = runtime(request).live
+    views = runtime(request, slug).live
     # 403, not 401: a stale token must not count as a failed login and get the phone's IP banned.
     # Checked before the camera lookup so strangers can't probe which cameras exist.
     if not request.get(KEY_AUTHENTICATED) and not views.token_ok(request.query.get("token", ""), slug):

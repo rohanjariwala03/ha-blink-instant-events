@@ -9,13 +9,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import hashlib
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
 from blinkpy.camera import BlinkCamera
 
-from homeassistant.components.camera import Camera
+from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 
 from . import BlinkInstantConfigEntry
 from .coordinator import BlinkCoordinator
@@ -91,7 +92,12 @@ class BlinkSnapshotCamera(BlinkCameraEntity, Camera):
 
 
 class BlinkLiveCamera(BlinkCameraEntity, Camera):
-    """Where the app reads live-view facts; the stream itself is the HLS API (docs/app-api.md)."""
+    """Live view as a Home Assistant stream (HomeKit, go2rtc, Frigate, the dashboard), and live-view facts for apps.
+
+    Opening the stream wakes the camera, like live view in the Blink app; it sleeps again once nothing reads it.
+    """
+
+    _attr_supported_features = CameraEntityFeature.STREAM
 
     def __init__(self, coordinator: BlinkCoordinator, camera: BlinkCamera) -> None:
         """Initialize."""
@@ -111,6 +117,18 @@ class BlinkLiveCamera(BlinkCameraEntity, Camera):
             "product_type": camera.product_type,
             "ptt_supported": ptt_supported(camera),
         }
+
+    async def stream_source(self) -> str | None:
+        """Our own HLS live view, fetched by Home Assistant over its local address."""
+        try:
+            base = get_url(self.hass, allow_external=False, allow_cloud=False)
+        except NoURLAvailableError:
+            return None
+        token = self.coordinator.config_entry.runtime_data.live.stream_token(self._slug)
+        return (
+            f"{base}/api/blink_instant_events/cameras/{self._slug}/hls/index.m3u8"
+            f"?token={quote(token, safe='')}&session=ha"
+        )
 
     async def async_camera_image(self, width: int | None = None, height: int | None = None) -> bytes | None:
         """The snapshot, as a poster frame."""

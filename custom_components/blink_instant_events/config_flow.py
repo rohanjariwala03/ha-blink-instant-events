@@ -44,6 +44,7 @@ from .const import (
     CONF_KEYFRAMES_ONLY,
     CONF_LIVE_LOOK,
     CONF_LIVE_LOOK_LIMIT,
+    CONF_LIVE_MAX_MINUTES,
     CONF_MAX_GB,
     CONF_MOTION,
     CONF_POST,
@@ -58,6 +59,7 @@ from .const import (
     CONF_WIDTH,
     DEFAULT_ARCHIVE_DAYS,
     DEFAULT_LIVE_LOOK_LIMIT,
+    DEFAULT_LIVE_MAX_MINUTES,
     DOMAIN,
     PROVIDER_BLINK,
     PROVIDER_CAMERA,
@@ -130,11 +132,6 @@ class BlinkInstantEventsConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_blink(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Ask for the Blink email and password."""
         errors: dict[str, str] = {}
-        if self.source != SOURCE_REAUTH and any(
-            entry.data.get(CONF_PROVIDER, PROVIDER_BLINK) == PROVIDER_BLINK
-            for entry in self._async_current_entries(include_ignore=False)
-        ):
-            return self.async_abort(reason="single_blink_account")
         if user_input is not None:
             self._auth = Auth(
                 {"username": user_input[CONF_EMAIL], "password": user_input[CONF_PASSWORD]},
@@ -333,6 +330,9 @@ class BlinkOptionsFlow(OptionsFlow):
                         CONF_SNAPSHOT_AFTER_MOTION, default=options.get(CONF_SNAPSHOT_AFTER_MOTION, False)
                     ): bool,
                     vol.Required(CONF_LIVE_LOOK, default=options.get(CONF_LIVE_LOOK, False)): bool,
+                    vol.Required(
+                        CONF_LIVE_MAX_MINUTES, default=options.get(CONF_LIVE_MAX_MINUTES, DEFAULT_LIVE_MAX_MINUTES)
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=90)),
                     vol.Required(CONF_ARCHIVE, default=options.get(CONF_ARCHIVE, False)): bool,
                     vol.Required(
                         CONF_ARCHIVE_DAYS, default=options.get(CONF_ARCHIVE_DAYS, DEFAULT_ARCHIVE_DAYS)

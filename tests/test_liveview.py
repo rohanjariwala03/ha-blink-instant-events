@@ -235,7 +235,9 @@ async def test_untrusted_server_is_refused(tmp_path: Path) -> None:
 async def test_idle_session_is_reaped(hass: HomeAssistant, setup_entry: MockConfigEntry) -> None:
     """A viewer that walked away frees the camera after IDLE_SECONDS; a watched one keeps it."""
     live = setup_entry.runtime_data.live
-    idle, watched = MagicMock(running=True, last_touch=0.0), MagicMock(running=True, last_touch=1e12)
+    now = liveview.time.monotonic()
+    idle = MagicMock(running=True, last_touch=0.0, started_at=now)
+    watched = MagicMock(running=True, last_touch=1e12, started_at=now)
     idle.stop = AsyncMock()
     watched.stop = AsyncMock()
     live.sessions = {"backyard": idle, "front_door": watched}
@@ -245,6 +247,18 @@ async def test_idle_session_is_reaped(hass: HomeAssistant, setup_entry: MockConf
     assert list(live.sessions) == ["front_door"]
 
 
+async def test_live_view_length_limit(hass: HomeAssistant, setup_entry: MockConfigEntry) -> None:
+    """A watched live view past the limit stops, and can't be restarted straight away."""
+    live = setup_entry.runtime_data.live
+    long = MagicMock(running=True, last_touch=1e12, started_at=liveview.time.monotonic() - 11 * 60)
+    long.stop = AsyncMock()
+    live.sessions = {"backyard": long}
+    await live._reap(None)
+    long.stop.assert_awaited_once()
+    with pytest.raises(RuntimeError, match="limit"):
+        await live.get_or_start("backyard", "app")
+
+
 async def test_tokens_are_per_camera(hass: HomeAssistant, setup_entry: MockConfigEntry) -> None:
     """A token works for its own camera only."""
     live = setup_entry.runtime_data.live
@@ -252,3 +266,18 @@ async def test_tokens_are_per_camera(hass: HomeAssistant, setup_entry: MockConfi
     assert live.token_ok(token, "backyard")
     assert not live.token_ok(token, "front_door")
     assert not live.token_ok("guess", "backyard")
+    assert not live.token_ok("", "backyard")
+
+
+async def test_live_view_is_a_stream_source(hass: HomeAssistant, setup_entry: MockConfigEntry) -> None:
+    """HomeKit and go2rtc get the HLS address with a token that lasts, for this camera only."""
+    from homeassistant.components.camera import async_get_stream_source
+
+    hass.config.internal_url = "http://192.168.1.2:8123"
+    source = await async_get_stream_source(hass, "camera.backyard_live_view")
+    prefix = "http://192.168.1.2:8123/api/blink_instant_events/cameras/backyard/hls/index.m3u8?token="
+    assert source.startswith(prefix) and source.endswith("&session=ha")
+    token = source.removeprefix(prefix).removesuffix("&session=ha")
+    live = setup_entry.runtime_data.live
+    assert live.token_ok(token, "backyard") and not live.token_ok(token, "front_door")
+    assert await async_get_stream_source(hass, "camera.backyard_live_view") == source  # stable

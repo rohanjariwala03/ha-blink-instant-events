@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.7
+
+- **Blink live view is a real camera stream.** `camera.<camera>_live_view` now has a stream source, so
+  Home Assistant's player, HomeKit Bridge (including the doorbell on Apple TV), go2rtc and Frigate can
+  play Blink live view. The stream wakes the camera while something reads it, like live view in the
+  Blink app, and the camera sleeps again once nothing does. (#25)
+- **More than one Blink account.** Add each account under Add integration → Local Camera Vision → Blink
+  account. Every account gets its own push connection; the HTTP API, the Media panel and `show_on_tv`
+  find the right account by camera, and a camera named like one in another account gets its own name
+  in the API (e.g. `front_door_<serial>`). (#31)
+- **Longest live view.** Configure → Settings → *Longest live view* (10 minutes by default, 0 for no
+  limit) stops a live view that is still running, even if a dashboard or Apple TV is still showing it,
+  so a forgotten stream can't keep a battery camera awake for Blink's full 90 minutes. It can start again
+  a minute later. (#29)
+- Measured on a Blink Outdoor 4: Blink doesn't end a live view after a few minutes (6 minutes ran on one
+  session; Blink allows up to 90). (#26)
+
 ## 0.7.6
 
 - **"Analyze a camera now" reports parked cars again.** The parked-vehicle filter from 0.7.4 also

@@ -165,3 +165,33 @@ def test_cameras_with_the_same_name_are_both_kept() -> None:
     index_cameras(blink)
     assert len(blink.cameras) == 4
     assert sorted(camera_slug(c) for c in blink.cameras.values()) == ["a2", "front_door", "front_door_b1", "kuche"]
+
+
+def test_second_account_cameras_get_their_own_names(hass: HomeAssistant) -> None:
+    """A camera named like one in another Blink account gets a different URL name, and requests find its account."""
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from requests.structures import CaseInsensitiveDict
+
+    from custom_components.blink_instant_events.providers.blink.coordinator import camera_slug, index_cameras
+    from custom_components.blink_instant_events.providers.blink.entry import blink_entry_for
+
+    door = SimpleNamespace(name="Front door", serial="C9", camera_id="C9")
+    blink = SimpleNamespace(
+        sync={"cabin": SimpleNamespace(cameras=CaseInsensitiveDict({"Front door": door}))},
+        cameras=CaseInsensitiveDict({}),
+    )
+    index_cameras(blink, taken={"front_door"})
+    assert camera_slug(door) == "front_door_c9"
+
+    def account(*slugs: str) -> SimpleNamespace:
+        return SimpleNamespace(runtime_data=SimpleNamespace(live=SimpleNamespace(camera=lambda s: s in slugs or None)))
+
+    home, cabin = account("front_door"), account("front_door_c9")
+    with patch(
+        "custom_components.blink_instant_events.providers.blink.entry.loaded_blink_entries", return_value=[home, cabin]
+    ):
+        assert blink_entry_for(hass, "front_door_c9") is cabin
+        assert blink_entry_for(hass, "front_door") is home
+        assert blink_entry_for(hass, "garage") is None

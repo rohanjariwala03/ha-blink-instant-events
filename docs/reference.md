@@ -64,7 +64,7 @@ Blink cameras also have:
 | `event.<camera>_blink_event` | `motion`, `doorbell_press` (doorbells), `detection`, or Blink's raw type (e.g. `camera_offline`). |
 | `binary_sensor.<camera>_motion` | On for 30 s after each motion push. `last_record` attribute. |
 | `camera.<camera>` | Latest Blink snapshot. |
-| `camera.<camera>_live_view` | Live-view details for apps (the stream is the HTTP API). |
+| `camera.<camera>_live_view` | Live view as a Home Assistant stream: the dashboard, HomeKit Bridge, go2rtc and Frigate can play it. Opening it wakes the camera, like live view in the Blink app. Also carries live-view details for apps. |
 | `button.<camera>_refresh_snapshot` | Take a new snapshot (wakes the camera). |
 | `switch.<camera>_motion_detection` | The camera's motion detection. |
 | `binary_sensor.<camera>_battery`, `sensor.<camera>_battery_voltage`, `sensor.<camera>_temperature`, `sensor.<camera>_wifi_signal` | Battery and health, where the model reports them. |
