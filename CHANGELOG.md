@@ -1,7 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.6.1
 
+- **Live view checks Blink's server certificate.** blinkpy opens the live-view connection with
+  certificate and hostname checks turned off, so anyone on the network path could have impersonated
+  Blink's server, read the video and taken the live-view token. The connection now uses Home
+  Assistant's default TLS context (system CAs, hostname or IP checked). A server that fails the check
+  ends the live view with "Blink's live-view server failed certificate verification: <reason>";
+  there is no insecure fallback.
 - **Push no longer drops every minute or two.** firebase-messaging 0.4.5 decodes a push's crypto-key and
   salt without adding base64 padding; a push carrying them unpadded raised "Incorrect padding", the push
   client shut down, reconnected and was handed the same push again, so the Push connection sensor (and any

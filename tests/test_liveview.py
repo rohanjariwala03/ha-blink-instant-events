@@ -9,6 +9,7 @@ import asyncio
 from collections.abc import AsyncGenerator
 import datetime
 from http import HTTPStatus
+import ipaddress
 from pathlib import Path
 import shutil
 import ssl
@@ -22,6 +23,7 @@ from cryptography.x509.oid import NameOID
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.blink_instant_events import liveview
 from homeassistant.core import HomeAssistant
 
 # A system ffmpeg first: imageio's static build segfaults resolving tcp:// on GitHub's runners.
@@ -41,6 +43,7 @@ def _tls_context(directory: Path) -> ssl.SSLContext:
         .serial_number(1)
         .not_valid_before(now)
         .not_valid_after(now + datetime.timedelta(days=1))
+        .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]), False)
         .sign(key, hashes.SHA256())
     )
     (directory / "cert.pem").write_bytes(cert.public_bytes(serialization.Encoding.PEM))
@@ -97,13 +100,20 @@ class FakeImmis:
             return
 
 
+def _trusting(cert: Path) -> ssl.SSLContext:
+    """A client context that trusts only the fake server's certificate (verification stays on)."""
+    return ssl.create_default_context(cafile=cert)
+
+
 @pytest.fixture
 async def immis(hass: HomeAssistant, tmp_path: Path) -> AsyncGenerator[tuple[FakeImmis, int]]:
-    """The fake server on a free port."""
+    """The fake server on a free port, its certificate trusted by the live view."""
     context = await hass.async_add_executor_job(_tls_context, tmp_path)
+    trusted = await hass.async_add_executor_job(_trusting, tmp_path / "cert.pem")
     fake = FakeImmis(await hass.async_add_executor_job(_camera_ts, tmp_path))
     server = await asyncio.start_server(fake.handle, "127.0.0.1", 0, ssl=context)
-    yield fake, server.sockets[0].getsockname()[1]
+    with patch("custom_components.blink_instant_events.liveview.tls_context", return_value=trusted):
+        yield fake, server.sockets[0].getsockname()[1]
     server.close()
 
 
@@ -175,6 +185,28 @@ async def test_live_view_end_to_end(
     resp = await authed.get(f"{BASE}/last-liveview.mp4")
     assert resp.status == HTTPStatus.OK
     assert b"ftyp" in (await resp.read())[:16]
+
+
+def test_live_view_verifies_the_server() -> None:
+    """blinkpy connects with checks off; ours requires a valid certificate for the server's name or IP."""
+    context = liveview.tls_context()
+    assert context.verify_mode == ssl.CERT_REQUIRED and context.check_hostname
+
+
+async def test_untrusted_server_is_refused(tmp_path: Path) -> None:
+    """A certificate that doesn't verify ends the live view before the token is sent."""
+    camera = MagicMock(serial="SERIAL", name="Backyard")
+    stream = liveview.ImmisStream(
+        camera, {"server": "immis://127.0.0.1:1/CONNID__IMDS?client_id=1", "command_id": 1, "polling_interval": 60}
+    )
+    error = ssl.SSLCertVerificationError("self-signed")
+    error.verify_message = "self-signed certificate"
+    with (
+        patch("asyncio.open_connection", AsyncMock(side_effect=error)),
+        pytest.raises(RuntimeError, match="certificate verification: self-signed certificate"),
+    ):
+        await stream.auth()
+    assert stream.target_writer is None
 
 
 async def test_idle_session_is_reaped(hass: HomeAssistant, setup_entry: MockConfigEntry) -> None:
