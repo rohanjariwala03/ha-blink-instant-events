@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1
+
+- **Fix: Blink accounts failed to load in 0.7.0** with `TypeError: 'method' object is not subscriptable`.
+  Moving the FCM constants dropped Blink's Firebase project from the push client's arguments, so the
+  stored credentials and the save callback each landed one place off. The call now names every argument,
+  and a test builds the real push client from exactly what setup passes.
+
 ## 0.7.0 — local cameras, one pipeline for every camera
 
 **Renamed: Local Camera Vision** (was Blink Instant Events; the add-on is **Camera Vision**, was Blink Vision). Only the names you see change: the domain `blink_instant_events`, entity ids, actions, the HTTP API and the add-on slug stay, so nothing needs setting up again.

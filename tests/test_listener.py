@@ -109,3 +109,22 @@ async def test_no_push_sign_in_yet(
     mock_account.associate.assert_not_awaited()
     assert ir.async_get(hass).async_get_issue(DOMAIN, f"push_sign_in_{config_entry.entry_id}")
     assert hass.states.get("binary_sensor.blink_instant_events_push_connection").state == "off"
+
+
+async def test_push_client_gets_blink_config_and_stored_credentials(
+    hass: HomeAssistant, setup_entry: MockConfigEntry, mock_fcm: MagicMock
+) -> None:
+    """The real client, built from exactly what setup passes, holds Blink's FCM project and our credentials.
+
+    The client is mocked everywhere else, which is how a call with its arguments shifted by one (the
+    save callback where the credentials go) once passed every test and failed on a real install.
+    """
+    from firebase_messaging import FcmPushClient  # noqa: PLC0415 - the real one; ours is patched here
+
+    from custom_components.blink_instant_events.providers.blink.const import FCM_CONFIG  # noqa: PLC0415
+
+    call = mock_fcm.call_args
+    client = FcmPushClient(*call.args, **call.kwargs)
+    assert client.fcm_config is FCM_CONFIG
+    assert client.credentials == setup_entry.data[CONF_FCM]
+    assert client.credentials_updated_callback == setup_entry.runtime_data.listener._save_credentials

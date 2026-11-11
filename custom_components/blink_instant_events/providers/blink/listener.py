@@ -34,6 +34,7 @@ from ...const import (
     SIGNAL_EVENT,
 )
 from .api import BlinkAccount
+from .const import FCM_CONFIG
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -165,9 +166,10 @@ class BlinkPushListener:
         await self._stop_client()
         self._associated_at = 0.0
         self._client = _FcmPushClient(
-            self._on_push,
-            self.entry.data.get(CONF_FCM),
-            self._save_credentials,
+            callback=self._on_push,
+            fcm_config=FCM_CONFIG,
+            credentials=self.entry.data.get(CONF_FCM),
+            credentials_updated_callback=self._save_credentials,
             http_client_session=async_get_clientsession(self.hass),
         )
         token = await self._client.checkin_or_register()
