@@ -327,18 +327,6 @@ add-on (needs `opencv-python-headless` and `numpy`).
 HTTP API for apps: [docs/app-api.md](docs/app-api.md). Upgrading: [docs/upgrade-0.7.md](docs/upgrade-0.7.md).
 From Blink Live View Proxy: [docs/migration.md](docs/migration.md). Protocol notes: [docs/protocol.md](docs/protocol.md).
 
-## Credits
-
-- [Teethree89/ha-blink-live-view-proxy](https://github.com/Teethree89/ha-blink-live-view-proxy) (MIT) —
-  live view, talk, camera controls, clips and device-state code ported from it.
-- [CoreyHayward/ha-blink-live-events](https://github.com/CoreyHayward/ha-blink-live-events) (MIT) —
-  the push protocol research this integration builds on.
-- [blinkpy](https://github.com/fronzbot/blinkpy) (MIT) — Blink sign-in, devices and livestream.
-- [OpenCV Model Zoo](https://github.com/opencv/opencv_zoo) — YuNet (MIT), SFace (Apache-2.0) and
-  YOLOX-S (Apache-2.0) models, downloaded when the Camera Vision add-on is built.
-- [firebase-messaging](https://github.com/sdb9696/firebase-messaging) (MIT) — FCM registration and
-  MCS client, also used by Home Assistant's Ring integration.
-
 See [NOTICE](NOTICE).
 
 ## License
