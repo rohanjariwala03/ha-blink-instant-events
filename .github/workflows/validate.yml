@@ -38,13 +38,10 @@ jobs:
           cache: pip
           cache-dependency-path: requirements_test.txt
       - name: Install ffmpeg
-        # The runner's Azure Ubuntu mirror sometimes stops answering (2026-11-11); fall back to Ubuntu's own.
+        # On 2026-11-11 the runners' Ubuntu mirrors stopped answering over plain HTTP; HTTPS still worked.
         run: |
-          install() { sudo timeout 90 sh -c 'apt-get update && apt-get install -y --no-install-recommends ffmpeg'; }
-          install && exit 0
-          echo "Azure's Ubuntu mirror failed; trying archive.ubuntu.com"
-          sudo grep -rl azure.archive.ubuntu.com /etc/apt | xargs sudo sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g'
-          install
+          sudo grep -rlE 'http://[a-z.]*ubuntu\.com' /etc/apt | xargs -r sudo sed -i -E 's#http://([a-z.]*ubuntu\.com)#https://\1#g'
+          sudo timeout 150 sh -c 'apt-get update && apt-get install -y --no-install-recommends ffmpeg'
       - run: pip install -r requirements_test.txt ruff
       - run: ruff check custom_components blink_vision tests
       - run: ruff format --check custom_components blink_vision tests
