@@ -252,3 +252,18 @@ async def test_tokens_are_per_camera(hass: HomeAssistant, setup_entry: MockConfi
     assert live.token_ok(token, "backyard")
     assert not live.token_ok(token, "front_door")
     assert not live.token_ok("guess", "backyard")
+    assert not live.token_ok("", "backyard")
+
+
+async def test_live_view_is_a_stream_source(hass: HomeAssistant, setup_entry: MockConfigEntry) -> None:
+    """HomeKit and go2rtc get the HLS address with a token that lasts, for this camera only."""
+    from homeassistant.components.camera import async_get_stream_source
+
+    hass.config.internal_url = "http://192.168.1.2:8123"
+    source = await async_get_stream_source(hass, "camera.backyard_live_view")
+    prefix = "http://192.168.1.2:8123/api/blink_instant_events/cameras/backyard/hls/index.m3u8?token="
+    assert source.startswith(prefix) and source.endswith("&session=ha")
+    token = source.removeprefix(prefix).removesuffix("&session=ha")
+    live = setup_entry.runtime_data.live
+    assert live.token_ok(token, "backyard") and not live.token_ok(token, "front_door")
+    assert await async_get_stream_source(hass, "camera.backyard_live_view") == source  # stable

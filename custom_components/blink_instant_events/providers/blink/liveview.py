@@ -410,6 +410,7 @@ class LiveViews:
         self.viewers: dict[str, LiveSession] = {}  # "<slug>:<session>" -> session, for talk and controls
         self.deferred = controls.DeferredControls()
         self._tokens: dict[str, _Token] = {}
+        self._stream_tokens: dict[str, str] = {}  # slug -> Home Assistant's own stream token
         self._hls_video: tuple[str, ...] | None = None
         self._locks: dict[str, asyncio.Lock] = {}
         self._flushes: dict[str, asyncio.Task[None]] = {}
@@ -460,8 +461,18 @@ class LiveViews:
         self._tokens[token] = _Token(slug, now + TOKEN_TTL_SECONDS)
         return token
 
+    def stream_token(self, slug: str) -> str:
+        """The token in the camera entity's stream source, for HomeKit, go2rtc and Home Assistant's player.
+
+        Home Assistant keeps the source URL it was given and fetches it again whenever the stream restarts, so this
+        one doesn't expire. It works for this camera only and changes with every restart of Home Assistant.
+        """
+        return self._stream_tokens.setdefault(slug, secrets.token_urlsafe(32))
+
     def token_ok(self, token: str, slug: str) -> bool:
         """Valid for this camera; extends it."""
+        if token and secrets.compare_digest(token, self._stream_tokens.get(slug, "")):
+            return True
         found = self._tokens.get(token)
         if not found or found.slug != slug or found.expires <= time.monotonic():
             return False
