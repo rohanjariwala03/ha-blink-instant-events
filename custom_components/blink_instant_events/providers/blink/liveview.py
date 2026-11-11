@@ -15,6 +15,7 @@ import asyncio
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from functools import cache
 import json
 import logging
 import os
@@ -34,7 +35,6 @@ from blinkpy.livestream import BlinkLiveStream
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
-from homeassistant.util.ssl import get_default_context
 
 from . import controls
 from .coordinator import BlinkCoordinator
@@ -65,9 +65,51 @@ def ptt_supported(camera: BlinkCamera) -> bool:
     return str(camera.product_type or "").casefold() not in NO_TALK_PRODUCT_TYPES
 
 
+# The certificate every Blink live-view (IMMIS) server presents: self-signed by Blink, CN *.immedia-semi.com,
+# valid 2016-2039, RSA 2048; the same on every regional server seen (fetched 2026-11-10 from two us-east-1
+# servers). Blink hands out servers by IP, so no public CA could vouch for them; this certificate is the only
+# one trusted for live view.
+# SHA-256 fingerprint B1:BF:A7:1B:A4:45:F0:DE:14:17:2A:13:82:DB:19:E8:84:8F:93:B8:50:EB:78:BD:13:FD:AB:C1:BE:7E:24:81
+BLINK_LIVEVIEW_CERT = """\
+-----BEGIN CERTIFICATE-----
+MIIECTCCAvGgAwIBAgIJANiVYtwQer2wMA0GCSqGSIb3DQEBCwUAMIGaMQswCQYD
+VQQGEwJVUzEWMBQGA1UECAwNTWFzc2FjaHVzZXR0czEPMA0GA1UEBwwGQm9zdG9u
+MQ8wDQYDVQQKDAZBbWF6b24xDjAMBgNVBAsMBUJsaW5rMRswGQYDVQQDDBIqLmlt
+bWVkaWEtc2VtaS5jb20xJDAiBgkqhkiG9w0BCQEWFWFkbWluQGltbWVkaWFzZW1p
+LmNvbTAeFw0xNjEyMzEyMzAwMDBaFw0zOTAxMTcyMzAwMDBaMIGaMQswCQYDVQQG
+EwJVUzEWMBQGA1UECAwNTWFzc2FjaHVzZXR0czEPMA0GA1UEBwwGQm9zdG9uMQ8w
+DQYDVQQKDAZBbWF6b24xDjAMBgNVBAsMBUJsaW5rMRswGQYDVQQDDBIqLmltbWVk
+aWEtc2VtaS5jb20xJDAiBgkqhkiG9w0BCQEWFWFkbWluQGltbWVkaWFzZW1pLmNv
+bTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAJMeg6NsRJe3jA5FwkVZ
+vzXXXKLQ9Gr6FHyQWg1BaNf3Ra+EM/+IBIBZMAKNl5PNAU/XEsh7/Mbfsom/+qmR
+yIXI7V4AFNbcRa5aXJRHdtXQnUdF4Bk20DHQGmuE1NqSkB1MWfy/KDFx9Vy0MwHj
+BlfkAqjBjZxE7JYUSgv9SpfRfu5wKGACnfxBcPXNil8Q6l0gEQIzxAseuPFluugd
+YSeygbHNF9pCGpj6RMOMjlTyH+PMWtVZreO3IUjed5rJp+Ux9b594X6m7CiqN7vp
+hdVIAgbAdtL6KFdf4RCiVCWJgsu1rhqdKVotDpOpCdYBLrg6loux6JNEfqtFDeJr
+ThECAwEAAaNQME4wHQYDVR0OBBYEFJ+eefswfz4IjsNOevws6dxD5/ViMB8GA1Ud
+IwQYMBaAFJ+eefswfz4IjsNOevws6dxD5/ViMAwGA1UdEwQFMAMBAf8wDQYJKoZI
+hvcNAQELBQADggEBACqKbnlnCTtEmBjZao5rjSPmjKxZJuRZk2bosuSWDnnIqDQD
+YQcL5fZv4wGgz7r76CiRma77z46aYKJAVSQkHVv1BpJgf1aBHmXuWdHcvXMSH8HO
+dkGLG1d/UIDAdI2X6DlOwN/ALuxt7PlPb9C+Urh5bvBdxn0kJqQ6gMujoPN8ZtKq
+WW+WW5/Zs5ZAbT4Ppgbte7febtbwA6e0ttmRwqxsnBNUtlDscXFA/BL5AWQ0cEQU
+mXrwcThQR2DtREu31kd9+M/CUqzO7mjIIsTygQ/rLAgJLVlpm/2Drsy3vh6Nj9Ng
+blpUmW3ZPdnqJ1YyDXkLPe2Mo+MgXNhsl4fAq7k=
+-----END CERTIFICATE-----
+"""
+
+
+@cache
 def tls_context() -> ssl.SSLContext:
-    """How the live-view server is checked: the system's CAs, with hostname (or IP) verification."""
-    return get_default_context()
+    """How the live-view server is checked: it must present Blink's own certificate, and nothing else will do.
+
+    No system CAs: a certificate from any public CA is refused too. The hostname check is off because Blink
+    names its servers by IP while the certificate names *.immedia-semi.com; the pinned anchor is what makes the
+    connection trustworthy.
+    """
+    context = ssl.create_default_context(cadata=BLINK_LIVEVIEW_CERT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_REQUIRED
+    return context
 
 
 def redacted(response: dict[str, Any]) -> dict[str, Any]:
