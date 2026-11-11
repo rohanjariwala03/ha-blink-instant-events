@@ -16,18 +16,16 @@ from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.util.unit_conversion import TemperatureConverter
 
+from ...const import BLINK_ERRORS, DOMAIN
 from . import controls
 from .clips import API as CLIPS_API, clip_id, public_clip
-from .const import BLINK_ERRORS, DOMAIN
+from .entry import loaded_blink_entry
 from .liveview import TOKEN_TTL_SECONDS, LiveViews, control_row, ptt_supported, talk
-from .vision import API as DETECTIONS_API
 
 if TYPE_CHECKING:
     from . import BlinkData
 
 CLIP_ID = re.compile(r"[0-9a-f]{24}")  # never let a decoded "/" reach a path join
-PEOPLE_API = "/api/blink_instant_events/people"
-MAX_PHOTO = 10 * 1024 * 1024
 SEGMENT = re.compile(r"segment_\d{5}\.ts")
 CAMERA_API = "/api/blink_instant_events/cameras/{slug}"
 NO_STORE = {"Cache-Control": "no-store"}
@@ -48,9 +46,6 @@ def async_register_views(hass: HomeAssistant) -> None:
         TalkView,
         ControlsView,
         LastLiveviewView,
-        DetectionImageView,
-        PeopleView,
-        PersonView,
     ):
         hass.http.register_view(view())
     hass.data[DOMAIN]["views"] = True
@@ -58,16 +53,16 @@ def async_register_views(hass: HomeAssistant) -> None:
 
 def runtime(request: web.Request) -> BlinkData:
     """The loaded account (one per Home Assistant)."""
-    entries = request.app["hass"].config_entries.async_loaded_entries(DOMAIN)
-    if not entries:
-        raise web.HTTPServiceUnavailable(text="Blink Instant Events is not loaded\n")
-    return entries[0].runtime_data
+    if (entry := loaded_blink_entry(request.app["hass"])) is None:
+        raise web.HTTPServiceUnavailable(text="No Blink account is loaded\n")
+    return entry.runtime_data
 
 
 def blink_failed(request: web.Request, err: Exception) -> web.HTTPException:
     """A 503 (and Home Assistant's reauth prompt) when Blink signed us out, else a 502 with the reason."""
     if isinstance(err, UnauthorizedError):
-        request.app["hass"].config_entries.async_loaded_entries(DOMAIN)[0].async_start_reauth(request.app["hass"])
+        if entry := loaded_blink_entry(request.app["hass"]):
+            entry.async_start_reauth(request.app["hass"])
         return web.HTTPServiceUnavailable(text="Blink signed this session out; re-authenticate in Home Assistant\n")
     return web.HTTPBadGateway(text=f"Blink did not answer as expected: {err}\n")
 
@@ -114,7 +109,7 @@ class ClipsView(HomeAssistantView):
         for clip in rows:
             key = clip_id(clip)
             cached = await hass.async_add_executor_job(clips.cached, key, ".jpg") is not None
-            listed.append(public_clip(clip, args, cached) | {"detection": data.vision.public(key)})
+            listed.append(public_clip(clip, args, cached) | {"detection": data.vision.pipeline.public(key)})
         return web.json_response(
             {
                 "count": len(listed),
@@ -354,66 +349,3 @@ class LastLiveviewView(HomeAssistantView):
                 "Content-Disposition": f'attachment; filename="{slug}_last_liveview.mp4"',
             },
         )
-
-
-class DetectionImageView(HomeAssistantView):
-    """GET /detections/<clip id>.jpg: the frame Blink Vision judged, boxes drawn (signed links work too)."""
-
-    url = DETECTIONS_API + "/{key}.jpg"
-    name = "api:blink_instant_events:detection_image"
-
-    async def get(self, request: web.Request, key: str) -> web.FileResponse:
-        """The picture."""
-        if not CLIP_ID.fullmatch(key):
-            raise web.HTTPNotFound
-        path = runtime(request).vision.image_path(key)
-        if not await request.app["hass"].async_add_executor_job(path.is_file):
-            raise web.HTTPNotFound
-        return web.FileResponse(path, headers={**KEEP, "Content-Type": "image/jpeg"})
-
-
-async def to_vision(request: web.Request, method: str, path: str, data: bytes | None = None) -> web.Response:
-    """Answer with what Blink Vision answered."""
-    try:
-        status, body, kind = await runtime(request).vision.async_request(method, path, data)
-    except (*BLINK_ERRORS,) as err:
-        raise web.HTTPBadGateway(text=f"Blink Vision did not answer: {err}\n") from err
-    return web.Response(status=status, body=body, content_type=kind, headers=NO_STORE)
-
-
-class PeopleView(HomeAssistantView):
-    """GET /people: the people Blink Vision knows, with how many photos of each."""
-
-    url = PEOPLE_API
-    name = "api:blink_instant_events:people"
-
-    async def get(self, request: web.Request) -> web.Response:
-        """List."""
-        return await to_vision(request, "GET", "/people")
-
-
-class PersonView(HomeAssistantView):
-    """POST /people/<name> (a JPEG: learn this face), DELETE /people/<name>, GET /people/<name>.jpg."""
-
-    url = PEOPLE_API + "/{name}"
-    name = "api:blink_instant_events:person"
-
-    async def get(self, request: web.Request, name: str) -> web.Response:
-        """The face from the first photo."""
-        if not name.endswith(".jpg"):
-            raise web.HTTPNotFound
-        return await to_vision(request, "GET", f"/people/{quote(name)}")
-
-    async def post(self, request: web.Request, name: str) -> web.Response:
-        """Add a photo of this person (admins only: it decides whose visits stay quiet)."""
-        if not request["hass_user"].is_admin:
-            raise web.HTTPForbidden(text="Only an administrator can teach faces\n")
-        if not 0 < (request.content_length or 0) <= MAX_PHOTO:
-            raise web.HTTPRequestEntityTooLarge(max_size=MAX_PHOTO, actual_size=request.content_length or 0)
-        return await to_vision(request, "POST", f"/people/{quote(name)}", await request.read())
-
-    async def delete(self, request: web.Request, name: str) -> web.Response:
-        """Forget this person."""
-        if not request["hass_user"].is_admin:
-            raise web.HTTPForbidden(text="Only an administrator can forget faces\n")
-        return await to_vision(request, "DELETE", f"/people/{quote(name)}")

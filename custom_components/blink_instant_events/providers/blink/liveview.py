@@ -34,6 +34,7 @@ from blinkpy.livestream import BlinkLiveStream
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
+from homeassistant.util.ssl import get_default_context
 
 from . import controls
 from .coordinator import BlinkCoordinator
@@ -62,6 +63,11 @@ NO_TALK_PRODUCT_TYPES = {"xt", "white"}
 def ptt_supported(camera: BlinkCamera) -> bool:
     """Every IMMIS family has a speaker the live-view session can drive."""
     return str(camera.product_type or "").casefold() not in NO_TALK_PRODUCT_TYPES
+
+
+def tls_context() -> ssl.SSLContext:
+    """How the live-view server is checked: the system's CAs, with hostname (or IP) verification."""
+    return get_default_context()
 
 
 def redacted(response: dict[str, Any]) -> dict[str, Any]:
@@ -103,6 +109,22 @@ class ImmisStream(BlinkLiveStream):
         self._field(header, self.target.path.split("/")[-1].split("__")[0], 16)
         header += bytes([0x00, 0x00, 0x00, 0x01])
         return header
+
+    async def auth(self) -> None:
+        """blinkpy's connect and auth header, but the server must prove who it is.
+
+        blinkpy connects with certificate checks turned off, which would hand the liveview token and the video to
+        anyone on the path. A server that fails verification ends the live view instead.
+        """
+        try:
+            self.target_reader, self.target_writer = await asyncio.open_connection(
+                self.target.hostname, self.target.port, ssl=tls_context()
+            )
+        except ssl.SSLCertVerificationError as err:
+            reason = err.verify_message or err.reason
+            raise RuntimeError(f"Blink's live-view server failed certificate verification: {reason}") from err
+        self.target_writer.write(self.get_auth_header())
+        await self.target_writer.drain()
 
     async def write_frame(self, msgtype: int, sequence: int, payload: bytes = b"") -> None:
         """Send one IMMI frame to Blink."""

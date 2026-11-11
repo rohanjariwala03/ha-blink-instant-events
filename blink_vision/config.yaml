@@ -1,12 +1,32 @@
-name: Blink Vision
-version: 0.1.1
+name: Camera Vision
+version: 0.2.0
 slug: blink_vision
-description: Local face recognition and person, vehicle and animal detection for Blink Instant Events
-url: https://github.com/rohanjariwala03/ha-blink-instant-events/tree/main/blink_vision
+description: Local face recognition and person, vehicle and animal detection for Local Camera Vision
+url: https://github.com/rohanjariwala03/ha-local-camera-vision/tree/main/blink_vision
 arch:
   - aarch64
   - amd64
 init: false
 startup: application
 boot: auto
-# No ports: only Home Assistant (and other add-ons) on the internal network reach it.
+# No ports: only Home Assistant (and other add-ons) on the internal network reach it, with the token.
+# The token reaches Home Assistant through Supervisor discovery (needs the Supervisor API).
+hassio_api: true
+discovery:
+  - blink_instant_events
+options:
+  same_person: 0.363
+  uncertain_from: 0.30
+  face_score: 0.8
+  object_score: 0.45
+  min_face: 32
+  min_enrol_face: 80
+  min_sharpness: 60
+schema:
+  same_person: float(0.2,0.9)
+  uncertain_from: float(0.1,0.9)
+  face_score: float(0.3,0.99)
+  object_score: float(0.1,0.95)
+  min_face: int(16,256)
+  min_enrol_face: int(32,512)
+  min_sharpness: float(0,1000)

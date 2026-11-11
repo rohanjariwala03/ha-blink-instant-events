@@ -38,3 +38,13 @@ jobs:
       - run: ruff check custom_components blink_vision tests
       - run: ruff format --check custom_components blink_vision tests
       - run: pytest -q
+
+  blink-vision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install opencv-python-headless==4.12.0.88 numpy==2.2.6 pytest
+      - run: pytest -q blink_vision

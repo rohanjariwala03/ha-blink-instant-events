@@ -1,4 +1,4 @@
-"""Smart detection (Blink Vision), the people API and show_on_tv."""
+"""Smart detection (Camera Vision), the people API and show_on_tv."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed, async_mock_service
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
+from custom_components.blink_instant_events.ai.pipeline import best_frame, split_jpegs, summarize
 from custom_components.blink_instant_events.const import CONF_LIVE_LOOK, CONF_VISION_URL
-from custom_components.blink_instant_events.vision import best_frame, split_jpegs, summarize
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
@@ -94,7 +94,7 @@ async def test_detection_end_to_end(
     hass_client,
     clip_file: Path,
 ) -> None:
-    """Motion push -> clip -> frames -> Blink Vision -> event, image entity, clip label, picture."""
+    """Motion push -> clip -> frames -> Camera Vision -> event, image entity, clip label, picture."""
     aioclient_mock.get(f"{VISION}/health", json={"ok": True})
     aioclient_mock.post(
         f"{VISION}/analyze",
@@ -114,15 +114,21 @@ async def test_detection_end_to_end(
         "url": "https://rest-u001/clip.mp4",
     }
     with (
-        patch("custom_components.blink_instant_events.vision.WAIT_FOR_CLIP", (0,)),
-        patch("custom_components.blink_instant_events.clips.Clips.async_list", AsyncMock(return_value=[clip])),
-        patch("custom_components.blink_instant_events.clips.Clips.async_clip", AsyncMock(return_value=clip_file)),
-        patch("custom_components.blink_instant_events.clips.Clips.cached", return_value=None),
+        patch("custom_components.blink_instant_events.providers.blink.vision.WAIT_FOR_CLIP", (0,)),
+        patch(
+            "custom_components.blink_instant_events.providers.blink.clips.Clips.async_list",
+            AsyncMock(return_value=[clip]),
+        ),
+        patch(
+            "custom_components.blink_instant_events.providers.blink.clips.Clips.async_clip",
+            AsyncMock(return_value=clip_file),
+        ),
+        patch("custom_components.blink_instant_events.providers.blink.clips.Clips.cached", return_value=None),
     ):
         assert await hass.config_entries.async_setup(config_entry.entry_id)
         await hass.async_block_till_done()
         data = config_entry.runtime_data
-        data.vision.ffmpeg = FFMPEG
+        data.vision.pipeline.ffmpeg = FFMPEG
         assert data.vision.enabled
 
         body = {"created_at": dt_util.utcnow().isoformat(), "event_type": "pir", "camera_id": 100001}
@@ -174,7 +180,7 @@ async def test_live_look(
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
     vision = config_entry.runtime_data.vision
-    vision.ffmpeg = FFMPEG
+    vision.pipeline.ffmpeg = FFMPEG
     live = vision.live = MagicMock(sessions={}, viewers={})
     session = MagicMock(wait_ready=AsyncMock())
 
@@ -186,7 +192,7 @@ async def test_live_look(
     live.async_stop = AsyncMock(side_effect=lambda slug: live.sessions.pop(slug))
     live.last_liveview_mp4 = AsyncMock(return_value=clip_file)
     body = {"created_at": dt_util.utcnow().isoformat(), "event_type": "pir", "camera_id": 100001}
-    with patch("custom_components.blink_instant_events.vision.LOOK_SECONDS", 0):
+    with patch("custom_components.blink_instant_events.providers.blink.vision.LOOK_SECONDS", 0):
         config_entry.runtime_data.listener._on_push({"data": json.dumps(body)}, "p1")
         await hass.async_block_till_done(wait_background_tasks=True)
         live.async_stop.assert_awaited_once_with("backyard")
@@ -200,7 +206,7 @@ async def test_live_look(
         config_entry.runtime_data.listener._on_push({"data": json.dumps(body | {"unique_id": "x2"})}, "p2")
         await hass.async_block_till_done(wait_background_tasks=True)
         live.async_stop.assert_not_awaited()
-        assert len(vision.rows) == 1
+        assert len(vision.pipeline.rows) == 1
 
         # Nobody in view by the time it looked.
         aioclient_mock.clear_requests()
@@ -222,7 +228,7 @@ async def test_people_api(
     aioclient_mock: AiohttpClientMocker,
     hass_client,
 ) -> None:
-    """Passed through to Blink Vision; 503 when it isn't running."""
+    """Passed through to Camera Vision; 503 when it isn't running."""
     config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
@@ -235,7 +241,7 @@ async def test_people_api(
     aioclient_mock.post(f"{VISION}/people/Rohan%20J", json={"name": "Rohan J", "photos": 3}, headers=JSON)
     aioclient_mock.delete(f"{VISION}/people/Rohan%20J", json={"deleted": "Rohan J"}, headers=JSON)
     hass.config_entries.async_update_entry(config_entry, options={CONF_VISION_URL: VISION})
-    config_entry.runtime_data.vision.url = None  # re-probed on the next request
+    config_entry.runtime_data.vision.pipeline.url = None  # re-probed on the next request
     assert (await (await client.get("/api/blink_instant_events/people")).json())["people"][0]["photos"] == 2
     resp = await client.post("/api/blink_instant_events/people/Rohan%20J", data=b"\xff\xd8jpeg")
     assert (await resp.json())["photos"] == 3
@@ -273,3 +279,31 @@ async def test_show_on_tv(hass: HomeAssistant, setup_entry: MockConfigEntry) -> 
 def internal_url(hass: HomeAssistant) -> None:
     """show_on_tv needs a local URL for the TV to fetch."""
     hass.config.internal_url = "http://192.168.1.2:8123"
+
+
+def face(name: str | None, similarity: float, match: str | None = None, candidate: str | None = None) -> dict:
+    return {"name": name, "similarity": similarity, "match": match, "candidate": candidate, "box": [1, 1, 40, 40]}
+
+
+def test_identity_needs_confirmation() -> None:
+    """A weak match in one frame is only "possibly"; two frames (or one strong match) make it known."""
+    weak = {"faces": [face("Rohan", 0.40)], "objects": []}
+    once = summarize([weak, {"faces": [], "objects": []}])
+    assert (once["summary"], once["identity"], once["known_only"]) == ("Possibly Rohan", "uncertain", False)
+    twice = summarize([weak, weak])
+    assert (twice["people"], twice["identity"], twice["known_only"]) == (["Rohan"], "known", True)
+    assert twice["matches"] == {"Rohan": 0.4}
+    strong = summarize([{"faces": [face("Rohan", 0.62)], "objects": []}])
+    assert strong["identity"] == "known"
+
+
+def test_uncertain_and_unknown_never_count_as_known() -> None:
+    """The add-on's uncertain band names a candidate; any unknown face makes the whole event unknown."""
+    frames = [
+        {"faces": [face(None, 0.31, "uncertain", "Priya")], "objects": [{"label": "dog", "group": "animal"}]},
+        {"faces": [face("Rohan", 0.7), face(None, 0.1, "unknown")], "objects": []},
+    ]
+    result = summarize(frames)
+    assert result["summary"] == "Rohan, possibly Priya, an unknown person and an animal"
+    assert result["identity"] == "unknown" and result["known_only"] is False
+    assert {"person", "animal", "pet"} <= set(result["labels"])

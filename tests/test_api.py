@@ -9,7 +9,7 @@ from blinkpy.helpers.constants import OAUTH_TOKEN_URL
 import pytest
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.blink_instant_events.api import BlinkAuth, async_push_sign_in, sign_in_request
+from custom_components.blink_instant_events.providers.blink.api import BlinkAuth, async_push_sign_in, sign_in_request
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 

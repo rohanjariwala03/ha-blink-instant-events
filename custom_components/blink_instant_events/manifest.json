@@ -1,6 +1,6 @@
 {
   "domain": "blink_instant_events",
-  "name": "Blink Instant Events",
+  "name": "Local Camera Vision",
   "after_dependencies": [
     "hassio",
     "media_source"
@@ -13,10 +13,10 @@
     "ffmpeg",
     "http"
   ],
-  "documentation": "https://github.com/rohanjariwala03/ha-blink-instant-events",
+  "documentation": "https://github.com/rohanjariwala03/ha-local-camera-vision",
   "integration_type": "hub",
   "iot_class": "cloud_push",
-  "issue_tracker": "https://github.com/rohanjariwala03/ha-blink-instant-events/issues",
+  "issue_tracker": "https://github.com/rohanjariwala03/ha-local-camera-vision/issues",
   "loggers": [
     "blinkpy",
     "firebase_messaging"
@@ -25,6 +25,5 @@
     "blinkpy>=0.25.9",
     "firebase-messaging==0.4.5"
   ],
-  "single_config_entry": true,
-  "version": "0.6.0"
+  "version": "0.7.0"
 }

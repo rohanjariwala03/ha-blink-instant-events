@@ -2,6 +2,16 @@
   "config": {
     "step": {
       "user": {
+        "title": "Add to Local Camera Vision",
+        "description": "Local cameras need no account or cloud service; smart detection runs in the Camera Vision add-on on your own hardware.",
+        "menu_options": {
+          "rtsp": "RTSP camera (stream address on your network)",
+          "camera": "A camera already in Home Assistant (ONVIF, Generic, …)",
+          "blink": "Blink account (cloud)",
+          "vision": "Camera Vision address (add-on running elsewhere)"
+        }
+      },
+      "blink": {
         "title": "Sign in to Blink",
         "description": "Signs in as a separate Blink app client that receives push notifications. Your password is used once and not stored.",
         "data": {
@@ -22,26 +32,71 @@
         "data_description": {
           "pin": "The verification code from Blink."
         }
+      },
+      "rtsp": {
+        "title": "RTSP camera",
+        "description": "The camera's stream address, e.g. `rtsp://192.168.1.20:554/stream2`. Use its smaller sub-stream if it has one: detection needs little resolution and the Pi decodes it faster. One frame is read to check the address.",
+        "data": {
+          "name": "Name",
+          "url": "Stream address",
+          "username": "Username",
+          "password": "Password"
+        },
+        "data_description": {
+          "url": "rtsp:// or rtsps://. A login in the address is moved to the fields below.",
+          "username": "Leave empty if the camera has no login."
+        }
+      },
+      "camera": {
+        "title": "Camera in Home Assistant",
+        "description": "For ONVIF cameras, add them with Home Assistant's ONVIF integration first: it discovers them, picks the stream profile and turns their motion events into a binary sensor. Then pick that camera and sensor here.",
+        "data": {
+          "camera": "Camera",
+          "motion": "Motion sensor"
+        },
+        "data_description": {
+          "motion": "When this turns on, a few pictures are analyzed."
+        }
+      },
+      "vision": {
+        "title": "Camera Vision",
+        "description": "Only needed when the add-on wasn't found by itself, e.g. the Docker image on another machine.",
+        "data": {
+          "vision_url": "Address",
+          "vision_token": "Token"
+        },
+        "data_description": {
+          "vision_url": "e.g. http://192.168.1.5:8000",
+          "vision_token": "BLINK_VISION_TOKEN of the container, or the token in the add-on's log."
+        }
+      },
+      "hassio_confirm": {
+        "title": "Camera Vision",
+        "description": "Use the Camera Vision add-on for smart detection?"
       }
     },
     "error": {
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid authentication",
       "invalid_pin": "The PIN was not accepted. Check it and try again.",
-      "unknown": "Unexpected error"
+      "unknown": "Unexpected error",
+      "not_rtsp": "Enter an rtsp:// or rtsps:// address.",
+      "bad_host": "The address has no valid host or port."
     },
     "abort": {
-      "already_configured": "Account is already configured",
+      "already_configured": "Device is already configured",
       "cannot_connect": "Failed to connect",
       "reauth_successful": "Re-authentication was successful",
-      "wrong_account": "Sign in with the same Blink account as before."
+      "wrong_account": "Sign in with the same Blink account as before.",
+      "single_blink_account": "A Blink account is already set up; only one is supported."
     }
   },
   "device_automation": {
     "trigger_type": {
       "motion": "Motion detected",
       "doorbell_press": "Doorbell pressed",
-      "detection": "Smart detection finished"
+      "detection": "Smart detection finished",
+      "recording": "Recording saved"
     }
   },
   "entity": {
@@ -60,6 +115,27 @@
       },
       "camera_connection": {
         "name": "Connection"
+      },
+      "person": {
+        "name": "Person"
+      },
+      "known_person": {
+        "name": "Known person"
+      },
+      "unknown_person": {
+        "name": "Unknown person"
+      },
+      "uncertain_person": {
+        "name": "Uncertain identity"
+      },
+      "vehicle": {
+        "name": "Vehicle"
+      },
+      "pet": {
+        "name": "Pet"
+      },
+      "stream_connected": {
+        "name": "Stream"
       }
     },
     "button": {
@@ -84,6 +160,18 @@
             }
           }
         }
+      },
+      "camera_event": {
+        "name": "Event",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "motion": "Motion",
+              "detection": "Detection",
+              "recording": "Recording"
+            }
+          }
+        }
       }
     },
     "sensor": {
@@ -98,6 +186,9 @@
       },
       "last_refresh": {
         "name": "Last Blink refresh"
+      },
+      "last_detection": {
+        "name": "Last detection"
       }
     },
     "switch": {
@@ -135,7 +226,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "Blink Instant Events",
+        "title": "Local Camera Vision",
         "menu_options": {
           "push_sign_in": "Sign in for instant events",
           "settings": "Settings"
@@ -153,12 +244,49 @@
         "data": {
           "snapshot_after_motion": "Take a snapshot after each motion",
           "live_look": "Look with live view after motion",
-          "vision_url": "Blink Vision URL"
+          "vision_url": "Camera Vision URL",
+          "vision_token": "Camera Vision token"
         },
         "data_description": {
           "snapshot_after_motion": "About 30 s after a motion push, ask the camera for a new picture (at most once per camera every 5 minutes). Each one wakes the camera, so it costs battery.",
-          "live_look": "For accounts without a Blink subscription, which get no clips. After each motion or doorbell push, watch 8 seconds of live view and let Blink Vision read it. Each look wakes the camera, much like recording a clip does, and starts about 5 seconds after the motion. Skipped while someone is watching the camera.",
-          "vision_url": "Leave empty to use the Blink Vision add-on. Set it only if Blink Vision runs somewhere else, e.g. http://192.168.1.20:8000."
+          "live_look": "For accounts without a Blink subscription, which get no clips. After each motion or doorbell push, watch 8 seconds of live view and let Camera Vision read it. Each look wakes the camera, much like recording a clip does, and starts about 5 seconds after the motion. Skipped while someone is watching the camera.",
+          "vision_url": "Leave empty to use the Camera Vision add-on. Set it only if Camera Vision runs somewhere else, e.g. http://192.168.1.20:8000.",
+          "vision_token": "Only with a Camera Vision address: the token from the add-on's log or BLINK_VISION_TOKEN."
+        }
+      },
+      "rtsp": {
+        "title": "RTSP camera",
+        "data": {
+          "fps": "Frames analyzed per second",
+          "width": "Frame width",
+          "keyframes_only": "Decode keyframes only",
+          "sensitivity": "Motion sensitivity",
+          "frames": "Frames per detection",
+          "cooldown": "Seconds between detections",
+          "record": "Recording",
+          "pre": "Seconds before the event",
+          "post": "Seconds after the event",
+          "keep_days": "Keep recordings for",
+          "max_gb": "Recordings may use at most"
+        },
+        "data_description": {
+          "keyframes_only": "Far less CPU on a Raspberry Pi; motion is seen up to one keyframe interval later.",
+          "sensitivity": "How much of the picture must change to count as motion. Raise it if leaves or rain set it off.",
+          "record": "Recordings go to the media folder (Media › My media › blink_instant_events). Recording pauses while the disk has under 2 GB free."
+        }
+      },
+      "camera": {
+        "title": "Camera in Home Assistant",
+        "data": {
+          "frames": "Pictures per detection",
+          "cooldown": "Seconds between detections"
+        }
+      },
+      "vision": {
+        "title": "Camera Vision",
+        "data": {
+          "vision_url": "Address",
+          "vision_token": "Token"
         }
       }
     },
@@ -166,7 +294,8 @@
       "bad_callback": "That isn't the address Blink ended on. It starts with {callback}. Copy it from the same sign-in page this form showed.",
       "sign_in_expired": "Blink didn't accept that sign-in; it may have expired. Open the new link and sign in again.",
       "cannot_connect": "Failed to connect",
-      "wrong_account": "Sign in with the same Blink account as before."
+      "wrong_account": "Sign in with the same Blink account as before.",
+      "invalid_auth": "Invalid authentication"
     }
   },
   "services": {
@@ -191,12 +320,63 @@
           "description": "Do nothing when the TV is off, instead of turning it on."
         }
       }
+    },
+    "enroll_face": {
+      "name": "Teach a face",
+      "description": "Admins only. Teaches Camera Vision this person's face from a camera's current picture or a photo file (one face, close, sharp, facing the camera). Unknown faces are never learned by themselves.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Who it is (letters, digits, spaces, . ' -)."
+        },
+        "camera": {
+          "name": "Camera",
+          "description": "Take the photo from this camera now."
+        },
+        "file": {
+          "name": "Photo file",
+          "description": "A JPEG or PNG in a folder Home Assistant allows, e.g. /media."
+        },
+        "force": {
+          "name": "Even if it looks like someone else",
+          "description": "Keep the photo although it already matches another person."
+        }
+      }
+    },
+    "delete_face": {
+      "name": "Forget a face",
+      "description": "Admins only. Deletes every photo and face feature kept for this person.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Who to forget."
+        }
+      }
+    },
+    "process_snapshot": {
+      "name": "Analyze a camera now",
+      "description": "Sends any camera's current picture through smart detection and returns what it found (who, what, how sure).",
+      "fields": {
+        "camera": {
+          "name": "Camera",
+          "description": "Any camera in Home Assistant."
+        }
+      }
     }
   },
   "issues": {
     "push_sign_in": {
       "title": "Instant Blink events need one more sign-in",
-      "description": "Blink sends motion and doorbell pushes only to its Android app. For {account}, go to Settings › Devices & services › Blink Instant Events › Configure › Sign in for instant events. Until then, motion shows up from polling, every 5 minutes, and doorbell presses don't show up."
+      "description": "Blink sends motion and doorbell pushes only to its Android app. For {account}, go to Settings › Devices & services › Local Camera Vision › Configure › Sign in for instant events. Until then, motion shows up from polling, every 5 minutes, and doorbell presses don't show up."
+    }
+  },
+  "selector": {
+    "record": {
+      "options": {
+        "off": "Off",
+        "events": "Event clips",
+        "continuous": "Continuous"
+      }
     }
   }
 }

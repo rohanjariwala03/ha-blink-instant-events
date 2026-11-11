@@ -9,7 +9,8 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
-from .const import DOMAIN
+from ...ai.entities import Target
+from ...const import DOMAIN
 from .coordinator import BlinkCoordinator
 
 
@@ -33,6 +34,11 @@ def camera_device_info(camera: BlinkCamera) -> DeviceInfo:
         serial_number=camera.serial,
         sw_version=camera.version,
     )
+
+
+def detection_target(entry_id: str, camera: BlinkCamera) -> Target:
+    """Where the shared detection entities of this camera go: its own device."""
+    return Target(entry_id, camera_slug(camera), camera.serial, camera_device_info(camera))
 
 
 class BlinkCameraEntity(CoordinatorEntity[BlinkCoordinator]):

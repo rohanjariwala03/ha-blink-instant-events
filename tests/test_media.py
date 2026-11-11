@@ -82,7 +82,7 @@ async def test_clips_api(
     aioclient_mock.get("https://rest-u001/clip/1.mp4", content=b"mp4-bytes")
     client = await hass_client()
     with patch(
-        "custom_components.blink_instant_events.clips.blink_api.request_videos",
+        "custom_components.blink_instant_events.providers.blink.clips.blink_api.request_videos",
         AsyncMock(side_effect=[media, {"media": []}]),
     ):
         resp = await client.get("/api/blink_instant_events/clips?source=both&hours=720&limit=100&pages=10")

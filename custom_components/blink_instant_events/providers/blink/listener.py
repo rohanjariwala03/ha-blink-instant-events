@@ -23,18 +23,17 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util, slugify
 
-from .api import BlinkAccount
-from .const import (
+from ...const import (
     CONF_FCM,
     DOMAIN,
     DOORBELL_TYPES,
     EVENT_DOORBELL,
     EVENT_MOTION,
-    FCM_CONFIG,
     MOTION_TYPES,
     SIGNAL_CONNECTION,
     SIGNAL_EVENT,
 )
+from .api import BlinkAccount
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -167,7 +166,6 @@ class BlinkPushListener:
         self._associated_at = 0.0
         self._client = _FcmPushClient(
             self._on_push,
-            FCM_CONFIG,
             self.entry.data.get(CONF_FCM),
             self._save_credentials,
             http_client_session=async_get_clientsession(self.hass),

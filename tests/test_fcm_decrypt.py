@@ -14,7 +14,7 @@ from firebase_messaging import FcmPushClient
 import http_ece
 import pytest
 
-from custom_components.blink_instant_events.listener import _FcmPushClient
+from custom_components.blink_instant_events.providers.blink.listener import _FcmPushClient
 
 
 def b64(raw: bytes) -> str:

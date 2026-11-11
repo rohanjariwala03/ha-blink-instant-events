@@ -17,9 +17,10 @@ from homeassistant.components.media_source import (
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .clips import API, Clips, public_clip
 from .const import BLINK_ERRORS, DOMAIN
-from .entity import camera_slug
+from .providers.blink.clips import API, Clips, public_clip
+from .providers.blink.entity import camera_slug
+from .providers.blink.entry import loaded_blink_entry
 
 DAYS = 7
 # "clip/<id>.mp4?<listing args>": the part after "clip/" is the clip's path under the clips API.
@@ -42,10 +43,9 @@ class BlinkClips(MediaSource):
         self.hass = hass
 
     def _clips(self) -> Clips:
-        entries = self.hass.config_entries.async_loaded_entries(DOMAIN)
-        if not entries:
-            raise BrowseError("Blink Instant Events is not loaded")
-        return entries[0].runtime_data.clips
+        if (entry := loaded_blink_entry(self.hass)) is None:
+            raise BrowseError("No Blink account is loaded")
+        return entry.runtime_data.clips
 
     async def async_resolve_media(self, item: MediaSourceItem) -> PlayMedia:
         """The clip's URL; Home Assistant signs it for the player."""
