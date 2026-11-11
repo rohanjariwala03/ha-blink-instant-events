@@ -17,9 +17,9 @@ from homeassistant.components.media_source import (
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .clips import API, Clips, public_clip
 from .const import BLINK_ERRORS, DOMAIN
-from .entity import camera_slug
+from .providers.blink.clips import API, Clips, public_clip
+from .providers.blink.entity import camera_slug
 
 DAYS = 7
 # "clip/<id>.mp4?<listing args>": the part after "clip/" is the clip's path under the clips API.

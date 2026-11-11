@@ -24,7 +24,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .const import (
+from ...const import (
     AUTO_SNAPSHOT_MIN_SECONDS,
     CONF_SNAPSHOT_AFTER_MOTION,
     DOMAIN,

@@ -15,8 +15,8 @@ from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, CONF_PIN
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import REDIRECT_URI, async_push_sign_in, callback_code, sign_in_request
 from .const import CONF_AUTH, CONF_LIVE_LOOK, CONF_PUSH_AUTH, CONF_SNAPSHOT_AFTER_MOTION, CONF_VISION_URL, DOMAIN
+from .providers.blink.api import REDIRECT_URI, async_push_sign_in, callback_code, sign_in_request
 
 CONF_CALLBACK_URL = "callback_url"
 

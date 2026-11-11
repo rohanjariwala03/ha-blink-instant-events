@@ -27,7 +27,7 @@ from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 
-from .const import DOMAIN
+from ...const import DOMAIN
 
 SERVICE_SHOW_ON_TV = "show_on_tv"
 SCHEMA = vol.Schema(

@@ -7,6 +7,9 @@ from firebase_messaging import FcmRegisterConfig
 
 DOMAIN = "blink_instant_events"
 
+CONF_PROVIDER = "provider"
+PROVIDER_BLINK = "blink"
+
 CONF_AUTH = "auth"
 CONF_FCM = "fcm"
 CONF_PUSH_AUTH = "push_auth"  # the Android-client session Blink pushes to

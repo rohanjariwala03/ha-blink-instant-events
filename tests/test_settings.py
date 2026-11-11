@@ -10,7 +10,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
-APPLY = "custom_components.blink_instant_events.settings.controls.apply_changes"
+APPLY = "custom_components.blink_instant_events.providers.blink.settings.controls.apply_changes"
 
 
 async def test_night_vision(hass: HomeAssistant, setup_entry: MockConfigEntry) -> None:

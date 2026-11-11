@@ -8,8 +8,8 @@ from blinkpy.auth import BlinkTwoFARequiredError, LoginError
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.blink_instant_events.api import ANDROID_CLIENT, callback_code, sign_in_request
 from custom_components.blink_instant_events.const import CONF_AUTH, CONF_FCM, CONF_PUSH_AUTH, DOMAIN
+from custom_components.blink_instant_events.providers.blink.api import ANDROID_CLIENT, callback_code, sign_in_request
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -33,7 +33,7 @@ def mock_auth() -> MagicMock:
 @pytest.fixture(autouse=True)
 def no_setup() -> MagicMock:
     """Don't start the integration after the flow."""
-    with patch("custom_components.blink_instant_events.async_setup_entry", return_value=True) as m:
+    with patch("custom_components.blink_instant_events.providers.blink.async_setup_entry", return_value=True) as m:
         yield m
 
 

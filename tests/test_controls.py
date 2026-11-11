@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from custom_components.blink_instant_events import controls
+from custom_components.blink_instant_events.providers.blink import controls
 
 MINI2 = {"slug": "nursery", "name": "Nursery", "product_type": "hawk", "network_id": 1, "id": 2}
 

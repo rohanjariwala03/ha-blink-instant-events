@@ -17,7 +17,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry, async_
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.blink_instant_events.const import CONF_LIVE_LOOK, CONF_VISION_URL
-from custom_components.blink_instant_events.vision import best_frame, split_jpegs, summarize
+from custom_components.blink_instant_events.providers.blink.vision import best_frame, split_jpegs, summarize
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
@@ -114,10 +114,16 @@ async def test_detection_end_to_end(
         "url": "https://rest-u001/clip.mp4",
     }
     with (
-        patch("custom_components.blink_instant_events.vision.WAIT_FOR_CLIP", (0,)),
-        patch("custom_components.blink_instant_events.clips.Clips.async_list", AsyncMock(return_value=[clip])),
-        patch("custom_components.blink_instant_events.clips.Clips.async_clip", AsyncMock(return_value=clip_file)),
-        patch("custom_components.blink_instant_events.clips.Clips.cached", return_value=None),
+        patch("custom_components.blink_instant_events.providers.blink.vision.WAIT_FOR_CLIP", (0,)),
+        patch(
+            "custom_components.blink_instant_events.providers.blink.clips.Clips.async_list",
+            AsyncMock(return_value=[clip]),
+        ),
+        patch(
+            "custom_components.blink_instant_events.providers.blink.clips.Clips.async_clip",
+            AsyncMock(return_value=clip_file),
+        ),
+        patch("custom_components.blink_instant_events.providers.blink.clips.Clips.cached", return_value=None),
     ):
         assert await hass.config_entries.async_setup(config_entry.entry_id)
         await hass.async_block_till_done()
@@ -186,7 +192,7 @@ async def test_live_look(
     live.async_stop = AsyncMock(side_effect=lambda slug: live.sessions.pop(slug))
     live.last_liveview_mp4 = AsyncMock(return_value=clip_file)
     body = {"created_at": dt_util.utcnow().isoformat(), "event_type": "pir", "camera_id": 100001}
-    with patch("custom_components.blink_instant_events.vision.LOOK_SECONDS", 0):
+    with patch("custom_components.blink_instant_events.providers.blink.vision.LOOK_SECONDS", 0):
         config_entry.runtime_data.listener._on_push({"data": json.dumps(body)}, "p1")
         await hass.async_block_till_done(wait_background_tasks=True)
         live.async_stop.assert_awaited_once_with("backyard")

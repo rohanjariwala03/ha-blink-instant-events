@@ -10,7 +10,7 @@ from pytest_homeassistant_custom_component.common import async_get_device_automa
 from pytest_homeassistant_custom_component.components.diagnostics import get_diagnostics_for_config_entry
 
 from custom_components.blink_instant_events.const import DOMAIN
-from custom_components.blink_instant_events.listener import classify, flatten
+from custom_components.blink_instant_events.providers.blink.listener import classify, flatten
 from homeassistant.components import automation
 from homeassistant.components.device_automation import DeviceAutomationType
 from homeassistant.core import HomeAssistant

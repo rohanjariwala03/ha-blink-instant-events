@@ -23,7 +23,7 @@ from cryptography.x509.oid import NameOID
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.blink_instant_events import liveview
+from custom_components.blink_instant_events.providers.blink import liveview
 from homeassistant.core import HomeAssistant
 
 # A system ffmpeg first: imageio's static build segfaults resolving tcp:// on GitHub's runners.
@@ -112,7 +112,7 @@ async def immis(hass: HomeAssistant, tmp_path: Path) -> AsyncGenerator[tuple[Fak
     trusted = await hass.async_add_executor_job(_trusting, tmp_path / "cert.pem")
     fake = FakeImmis(await hass.async_add_executor_job(_camera_ts, tmp_path))
     server = await asyncio.start_server(fake.handle, "127.0.0.1", 0, ssl=context)
-    with patch("custom_components.blink_instant_events.liveview.tls_context", return_value=trusted):
+    with patch("custom_components.blink_instant_events.providers.blink.liveview.tls_context", return_value=trusted):
         yield fake, server.sockets[0].getsockname()[1]
     server.close()
 
@@ -138,11 +138,14 @@ async def test_live_view_end_to_end(
     running = {"status_code": 908, "commands": [{"id": 77, "state_condition": "running"}]}
     config = {"camera": [{"illuminator_enable": 2}], "signals": {"temp": 68}}
     with (
-        patch("custom_components.blink_instant_events.liveview.blink_api.http_post", AsyncMock(return_value=answer)),
+        patch(
+            "custom_components.blink_instant_events.providers.blink.liveview.blink_api.http_post",
+            AsyncMock(return_value=answer),
+        ),
         patch("blinkpy.livestream.api.request_command_status", AsyncMock(return_value=running)),
         patch("blinkpy.livestream.api.request_command_done", AsyncMock()) as done,
         patch(
-            "custom_components.blink_instant_events.controls.blink_api.request_camera_info",
+            "custom_components.blink_instant_events.providers.blink.controls.blink_api.request_camera_info",
             AsyncMock(return_value=config),
         ),
     ):

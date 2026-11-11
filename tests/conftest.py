@@ -57,7 +57,7 @@ def config_entry() -> MockConfigEntry:
 @pytest.fixture
 def mock_fcm() -> Generator[MagicMock]:
     """FcmPushClient that 'connects' instantly."""
-    with patch("custom_components.blink_instant_events.listener._FcmPushClient") as cls:
+    with patch("custom_components.blink_instant_events.providers.blink.listener._FcmPushClient") as cls:
         client = cls.return_value
         client.checkin_or_register = AsyncMock(return_value="fcm-token")
         client.start = AsyncMock()
@@ -71,7 +71,7 @@ def mock_fcm() -> Generator[MagicMock]:
 @pytest.fixture
 def mock_account() -> Generator[MagicMock]:
     """Push-client REST calls."""
-    base = "custom_components.blink_instant_events.api.BlinkAccount"
+    base = "custom_components.blink_instant_events.providers.blink.api.BlinkAccount"
     with (
         patch(f"{base}.async_associate", AsyncMock()) as associate,
         patch(f"{base}.async_send_receipt", AsyncMock()) as receipt,
@@ -168,8 +168,10 @@ def mock_blink() -> Generator[MagicMock]:
     # Camera settings, read from Blink's cloud: night vision on auto (code 2).
     settings = AsyncMock(return_value={"camera": [{"illuminator_enable": 2}]})
     with (
-        patch("custom_components.blink_instant_events.Blink", return_value=blink),
-        patch("custom_components.blink_instant_events.controls.blink_api.request_camera_info", settings),
+        patch("custom_components.blink_instant_events.providers.blink.Blink", return_value=blink),
+        patch(
+            "custom_components.blink_instant_events.providers.blink.controls.blink_api.request_camera_info", settings
+        ),
     ):
         yield blink
 

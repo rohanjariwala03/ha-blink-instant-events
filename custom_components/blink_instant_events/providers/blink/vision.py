@@ -29,8 +29,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util, slugify
 
-from .clips import Clips, clip_id
-from .const import (
+from ...const import (
     BLINK_ERRORS,
     CONF_LIVE_LOOK,
     CONF_VISION_URL,
@@ -39,6 +38,7 @@ from .const import (
     SIGNAL_DETECTION,
     SIGNAL_EVENT,
 )
+from .clips import Clips, clip_id
 from .coordinator import BlinkCoordinator
 from .entity import camera_slug
 
