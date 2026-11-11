@@ -19,6 +19,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from ...const import CONF_AUTH, CONF_PUSH_AUTH, DOMAIN
 from .api import BlinkAccount, BlinkAuth, PushAuth
+from .archive import Archiver
 from .clips import Clips
 from .coordinator import BlinkCoordinator
 from .listener import BlinkPushListener, ask_push_sign_in
@@ -116,6 +117,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BlinkInstantConfigEntry)
 
     live = LiveViews(hass, coordinator, ffmpeg)
     vision.live = live
+    Archiver(hass, entry, clips, live).async_start()
     settings = BlinkSettings(hass, entry, coordinator, live)
     await settings.async_refresh()  # not fatal: the setting entities stay unavailable until Blink answers
     await vision.async_start()  # not fatal either: smart detection stays off until Camera Vision answers

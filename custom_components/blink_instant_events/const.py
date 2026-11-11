@@ -18,6 +18,7 @@ CONF_MOTION = "motion"
 CONF_FPS = "fps"
 CONF_WIDTH = "width"
 CONF_KEYFRAMES_ONLY = "keyframes_only"
+CONF_HWACCEL = "hwaccel"  # let ffmpeg decode on the GPU when there is one
 CONF_SENSITIVITY = "sensitivity"  # % of the picture that must change to count as motion
 CONF_FRAMES = "frames"
 CONF_COOLDOWN = "cooldown"
@@ -36,6 +37,9 @@ CONF_VISION_TOKEN = "vision_token"
 CONF_LIVE_LOOK = "live_look"  # no clips (no Blink subscription): read a few seconds of live view after a push
 CONF_LIVE_LOOK_LIMIT = "live_look_limit"  # live looks per camera per day; each wakes a battery camera
 DEFAULT_LIVE_LOOK_LIMIT = 30
+CONF_ARCHIVE = "archive"  # copy new Blink clips to the media folder
+CONF_ARCHIVE_DAYS = "archive_days"
+DEFAULT_ARCHIVE_DAYS = 30
 
 # What blinkpy and Blink's odd answers raise; reported as 502 (or a failed update) rather than escaping as 500.
 BLINK_ERRORS = (ClientError, RuntimeError, TimeoutError, KeyError, ValueError, TypeError, OSError)

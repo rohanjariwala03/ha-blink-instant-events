@@ -25,6 +25,7 @@ from ...const import (
     CONF_COOLDOWN,
     CONF_FPS,
     CONF_FRAMES,
+    CONF_HWACCEL,
     CONF_KEEP_DAYS,
     CONF_KEYFRAMES_ONLY,
     CONF_MAX_GB,
@@ -53,6 +54,7 @@ DEFAULTS: dict[str, Any] = {
     CONF_FPS: 2.0,
     CONF_WIDTH: 640,
     CONF_KEYFRAMES_ONLY: False,
+    CONF_HWACCEL: False,
     CONF_SENSITIVITY: 2.0,
     CONF_FRAMES: 6,
     CONF_COOLDOWN: DEFAULT_COOLDOWN,
@@ -136,6 +138,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LocalConfigEntry) -> boo
         fps=float(option(entry, CONF_FPS)),
         width=int(option(entry, CONF_WIDTH)),
         keyframes_only=bool(option(entry, CONF_KEYFRAMES_ONLY)),
+        hwaccel=bool(option(entry, CONF_HWACCEL)),
         segments=recorder.segments if recorder and recorder.enabled else None,
         segment_seconds=recorder.segment_seconds if recorder else 2,
     )

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.5
+
+- **Archive Blink clips.** Configure → Settings → *Archive new clips* copies every new clip, from Blink's
+  cloud or the Sync Module's USB drive, to Media › My media › blink_instant_events › blink › camera › date,
+  and deletes archived clips after *Keep archived clips for* days (30). Checked once an hour, one clip at a
+  time, never during a live view, and paused while the disk has under 2 GB free. (#28)
+- **Hardware decoding for RTSP cameras.** Configure → *Hardware decoding* lets ffmpeg decode on an Intel,
+  AMD or NVIDIA graphics chip when Home Assistant can reach one, and falls back to the CPU otherwise. A
+  Raspberry Pi 5 has no H.264 decoder, so it gains nothing there. (#33)
+
 ## 0.7.4
 
 - **Blink entities ride out a failed poll.** One throttled answer or a token renewal that timed out
