@@ -34,6 +34,7 @@ from ...const import (
     POLL_SECONDS,
     PUSH_REFRESH_DELAY,
 )
+from .entry import loaded_blink_entries
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,14 +63,14 @@ def camera_slug(camera: BlinkCamera) -> str:
     return getattr(camera, "slug", None) or slugify(camera.name)
 
 
-def index_cameras(blink: Blink) -> None:
+def index_cameras(blink: Blink, taken: set[str] | None = None) -> None:
     """Every camera once, each with a URL name (``slug``) no other camera has.
 
     blinkpy merges the systems' cameras by name, so a "Front door" in each of two systems left one; and
     names such as "🚪" all slugify to "unknown". The second of a pair is keyed "<name> (<serial>)".
     """
     merged: CaseInsensitiveDict[BlinkCamera] = CaseInsensitiveDict({})
-    used: set[str] = set()
+    used: set[str] = set(taken or ())  # other Blink accounts' cameras
     for sync in blink.sync.values():
         for name, camera in dict(sync.cameras).items():
             slug = slugify(name)
@@ -132,7 +133,11 @@ class BlinkCoordinator(DataUpdateCoordinator[None]):
                 self.blink.setup_urls()
                 if not await self.blink.setup_post_verify():
                     raise RuntimeError("Blink did not list the cameras")
-                index_cameras(self.blink)
+                others = [e for e in loaded_blink_entries(self.hass) if e.entry_id != self.config_entry.entry_id]
+                index_cameras(
+                    self.blink,
+                    {camera_slug(cam) for e in others for cam in e.runtime_data.coordinator.blink.cameras.values()},
+                )
                 self.blink.last_refresh = int(dt_util.utcnow().timestamp())
             else:
                 drop_cached_videos(self.blink)

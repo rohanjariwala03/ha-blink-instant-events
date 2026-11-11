@@ -28,7 +28,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 
 from ...const import DOMAIN
-from .entry import loaded_blink_entry
+from .entry import blink_entry_for
 
 SERVICE_SHOW_ON_TV = "show_on_tv"
 SCHEMA = vol.Schema(
@@ -74,13 +74,11 @@ def async_setup_services(hass: HomeAssistant) -> None:
     """Register the action (once per Home Assistant run)."""
 
     async def show_on_tv(call: ServiceCall) -> None:
-        if (entry := loaded_blink_entry(hass)) is None:
-            raise ServiceValidationError("No Blink account is loaded")
-        live = entry.runtime_data.live
         camera = hass.states.get(call.data["camera"])
         slug = camera and (camera.attributes.get("snapshot_of") or camera.attributes.get("proxy_slug"))
-        if not slug or live.camera(slug) is None:
+        if not slug or (entry := blink_entry_for(hass, slug)) is None:
             raise ServiceValidationError(f"{call.data['camera']} is not a Local Camera Vision camera")
+        live = entry.runtime_data.live
         tv = hass.states.get(call.data["media_player"])
         if call.data["only_if_on"] and (tv is None or tv.state in TV_OFF):
             return

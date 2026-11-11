@@ -36,6 +36,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
+from ...const import CONF_LIVE_MAX_MINUTES, DEFAULT_LIVE_MAX_MINUTES
 from . import controls
 from .coordinator import BlinkCoordinator
 from .entity import camera_slug
@@ -46,6 +47,7 @@ _LOGGER = logging.getLogger(__name__)
 TOKEN_TTL_SECONDS = 600
 IDLE_SECONDS = 15
 REAP_EVERY = timedelta(seconds=5)
+REST_SECONDS = 60  # after the length limit, so a player that reconnects at once can't restart it
 START_TIMEOUT = 30
 # Blink's IMMI framing: 1-byte type, 4-byte sequence, 4-byte length.
 IMMI_HEADER_BYTES = 9
@@ -411,6 +413,7 @@ class LiveViews:
         self.deferred = controls.DeferredControls()
         self._tokens: dict[str, _Token] = {}
         self._stream_tokens: dict[str, str] = {}  # slug -> Home Assistant's own stream token
+        self._resting: dict[str, float] = {}  # slug -> monotonic time it may start again after the limit
         self._hls_video: tuple[str, ...] | None = None
         self._locks: dict[str, asyncio.Lock] = {}
         self._flushes: dict[str, asyncio.Task[None]] = {}
@@ -485,6 +488,8 @@ class LiveViews:
         if camera is None:
             raise KeyError(slug)
         async with self._locks.setdefault(slug, asyncio.Lock()):
+            if slug not in self.sessions and self._resting.get(slug, 0) > time.monotonic():
+                raise RuntimeError(f"{camera.name} reached its live view limit; it can start again in a minute")
             session = self.sessions.get(slug)
             if session and not session.running:
                 await self._end(slug)
@@ -533,8 +538,14 @@ class LiveViews:
 
     async def _reap(self, _now: datetime) -> None:
         now = time.monotonic()
+        options = self.coordinator.config_entry.options
+        limit = 60 * int(options.get(CONF_LIVE_MAX_MINUTES, DEFAULT_LIVE_MAX_MINUTES))
         for slug, session in list(self.sessions.items()):
-            if now - session.last_touch > IDLE_SECONDS or not session.running:
+            if limit and now - session.started_at > limit:
+                _LOGGER.info("Live view of %s reached its %d-minute limit", session.camera.name, limit // 60)
+                self._resting[slug] = now + REST_SECONDS
+                await self.async_stop(slug)
+            elif now - session.last_touch > IDLE_SECONDS or not session.running:
                 await self.async_stop(slug)
 
     def _schedule_flush(self, slug: str) -> None:

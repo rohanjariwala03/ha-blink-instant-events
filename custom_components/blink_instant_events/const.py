@@ -40,6 +40,8 @@ DEFAULT_LIVE_LOOK_LIMIT = 30
 CONF_ARCHIVE = "archive"  # copy new Blink clips to the media folder
 CONF_ARCHIVE_DAYS = "archive_days"
 DEFAULT_ARCHIVE_DAYS = 30
+CONF_LIVE_MAX_MINUTES = "live_max_minutes"  # longest live view; a forgotten player keeps a battery camera awake
+DEFAULT_LIVE_MAX_MINUTES = 10
 
 # What blinkpy and Blink's odd answers raise; reported as 502 (or a failed update) rather than escaping as 500.
 BLINK_ERRORS = (ClientError, RuntimeError, TimeoutError, KeyError, ValueError, TypeError, OSError)

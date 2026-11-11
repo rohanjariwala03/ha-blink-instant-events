@@ -89,8 +89,7 @@
       "already_configured": "Device is already configured",
       "cannot_connect": "Failed to connect",
       "reauth_successful": "Re-authentication was successful",
-      "wrong_account": "Sign in with the same Blink account as before.",
-      "single_blink_account": "A Blink account is already set up; only one is supported."
+      "wrong_account": "Sign in with the same Blink account as before."
     }
   },
   "device_automation": {
@@ -250,7 +249,8 @@
           "vision_token": "Camera Vision token",
           "live_look_limit": "Live looks per camera per day",
           "archive": "Archive new clips",
-          "archive_days": "Keep archived clips for (days)"
+          "archive_days": "Keep archived clips for (days)",
+          "live_max_minutes": "Longest live view (minutes)"
         },
         "data_description": {
           "snapshot_after_motion": "About 30 s after a motion push, ask the camera for a new picture (at most once per camera every 5 minutes). Each one wakes the camera, so it costs battery.",
@@ -259,7 +259,8 @@
           "vision_token": "Only with a Camera Vision address: the token from the add-on's log or BLINK_VISION_TOKEN.",
           "live_look_limit": "Protects batteries: once a camera has had this many live looks today, motion pushes don't open live view again until midnight. 0 means no limit.",
           "archive": "Copy every new clip, from Blink's cloud or the Sync Module's USB drive, to Media › My media › blink_instant_events › blink. Checked once an hour, one clip at a time, never during a live view. Pauses while the disk has under 2 GB free.",
-          "archive_days": "Archived clips older than this are deleted."
+          "archive_days": "Archived clips older than this are deleted.",
+          "live_max_minutes": "Protects batteries: a live view still running after this long is stopped, even if a player, dashboard or Apple TV is still open, and can start again a minute later. 0 means no limit (Blink allows up to 90 minutes)."
         }
       },
       "rtsp": {

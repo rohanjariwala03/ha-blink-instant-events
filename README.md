@@ -97,7 +97,7 @@ Worth knowing before you rely on it:
   network and it offers nothing to connect to ([details](docs/blink-local-feasibility.md)). If Blink's
   cloud is down, Blink cameras stop updating; local cameras keep going.
 - **Blink support is unofficial.** It copies what the Blink app does and can break whenever Blink
-  changes something. Automated access may also be against Blink's terms. One Blink account per Home Assistant.
+  changes something. Automated access may also be against Blink's terms.
 - **Blink without a subscription is slower.** With no clips to read, it opens live view after motion,
   which starts about 5 seconds late. Someone walking past quickly can be gone by then. Every look also
   wakes the camera and costs battery.

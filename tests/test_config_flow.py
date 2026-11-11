@@ -57,10 +57,16 @@ async def test_user_flow_with_2fa(hass: HomeAssistant, mock_auth: MagicMock) -> 
     assert "password" not in result["data"][CONF_AUTH]
     assert result["data"]["provider"] == "blink"
 
-    # One Blink account: a second one is turned away before any password is asked for.
+    # Another Blink account may be added; the same account twice may not.
+    mock_auth.complete_2fa_login = AsyncMock(return_value=True)
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "blink"})
-    assert result["type"] is FlowResultType.ABORT and result["reason"] == "single_blink_account"
+    assert result["step_id"] == "blink"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"email": "me@example.com", "password": "secret"}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"pin": "123456"})
+    assert result["type"] is FlowResultType.ABORT and result["reason"] == "already_configured"
 
 
 async def test_bad_password(hass: HomeAssistant, mock_auth: MagicMock) -> None:
