@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Live view no longer triggers Home Assistant's "Detected blocking call to load_verify_locations" warning:
+  the pinned certificate is loaded off the event loop.
+
 ## 0.7.7
 
 - **Blink live view is a real camera stream.** `camera.<camera>_live_view` now has a stream source, so

@@ -161,8 +161,10 @@ class ImmisStream(BlinkLiveStream):
         anyone on the path. A server that fails verification ends the live view instead.
         """
         try:
+            # Built off the event loop: loading the pinned certificate reads it, which Home Assistant flags as blocking.
+            context = await asyncio.get_running_loop().run_in_executor(None, tls_context)
             self.target_reader, self.target_writer = await asyncio.open_connection(
-                self.target.hostname, self.target.port, ssl=tls_context()
+                self.target.hostname, self.target.port, ssl=context
             )
         except ssl.SSLCertVerificationError as err:
             reason = err.verify_message or err.reason
