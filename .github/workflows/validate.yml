@@ -28,8 +28,8 @@ jobs:
 
   tests:
     runs-on: ubuntu-latest
-    # A normal run takes about 2 minutes; fail a hung one fast instead of after GitHub's 6 hours.
-    timeout-minutes: 10
+    # A normal run takes about 2 minutes; stop a hung one instead of waiting GitHub's 6 hours.
+    timeout-minutes: 7
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -38,10 +38,10 @@ jobs:
           cache: pip
           cache-dependency-path: requirements_test.txt
       - name: Install ffmpeg
-        # apt mirrors sometimes stall with no timeout of their own: 2 minutes per try, three tries.
+        # apt mirrors sometimes stall with no timeout of their own: 90 seconds per try, two tries.
         run: |
-          for try in 1 2 3; do
-            sudo timeout 120 sh -c 'apt-get update && apt-get install -y --no-install-recommends ffmpeg' && exit 0
+          for try in 1 2; do
+            sudo timeout 90 sh -c 'apt-get update && apt-get install -y --no-install-recommends ffmpeg' && exit 0
             echo "apt try $try failed or stalled"
           done
           exit 1
@@ -52,6 +52,7 @@ jobs:
 
   blink-vision:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
