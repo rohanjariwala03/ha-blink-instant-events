@@ -136,6 +136,7 @@ class RtspReader:
             await asyncio.sleep(delay)
 
     async def _run_once(self) -> None:
+        self._stderr.clear()  # last_error says why this run ended, not every run before it
         self._process = process = await asyncio.create_subprocess_exec(
             self.ffmpeg,
             *ffmpeg_args(self._url, self.options),
