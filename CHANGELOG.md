@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.7.0 — local cameras, one pipeline for every camera
+
+**Local cameras, no account or cloud.** Add an **RTSP camera** (address and optional login, checked by
+reading one frame), or **a camera already in Home Assistant** with its motion sensor (how ONVIF cameras
+come in, through Home Assistant's ONVIF integration). Nothing they do contacts Blink, Amazon or Google.
+
+- RTSP: one managed ffmpeg per camera (reconnects with backoff, terminated on unload, frames dropped
+  rather than queued while busy), motion measured on the stream, configurable fps, width, keyframes-only
+  decoding, sensitivity, frames per detection and cooldown. Camera entity with live view through Home
+  Assistant's stream; motion and stream-connection sensors; event entity (`motion`, `detection`,
+  `recording`).
+- Recording (RTSP, optional): event clips with time before and after, or continuous; copied, not
+  re-encoded; kept for N days and at most N GB; pauses under 2 GB free.
+- RTSP addresses are validated (rtsp/rtsps, real host) and ffmpeg may only open RTSP protocols; logins are
+  stored apart from the address and scrubbed from ffmpeg's messages, logs and diagnostics.
+
+**One smart-detection pipeline** (`ai/`) for Blink and local cameras:
+
+- New per-camera sensors, Blink included: person, known person, unknown person, uncertain identity,
+  vehicle, pet, last detection.
+- A name counts as known only when confirmed (two frames, or one strong match); weaker matches are
+  "possibly …" (`uncertain`) and never known; an unknown face makes the event `identity: unknown`.
+- Detection events add `identity`, `uncertain`, `matches`, `confidence`, `provider`, `source`,
+  `timestamp`, `detection_id`. Signed image links last 24 h (were 2 days).
+- Actions: `enroll_face` and `delete_face` (admins only; from a camera or an allowed file) and
+  `process_snapshot` (analyze any camera now, returns the detection). Device trigger **Recording saved**.
+- Face pictures in the people API are admin-only.
+
+**Blink Vision 0.2.0** (add-on): token on every call but `/health`, handed to Home Assistant through
+Supervisor discovery (or `BLINK_VISION_TOKEN` for Docker); known / uncertain / unknown bands; enrolment
+refuses no face, two faces, small, unclear or blurry faces and look-alikes of someone else (409, `force`),
+skips duplicates, keeps at most 20 photos; thresholds are add-on options; `benchmark.py` times each stage.
+
+**Blink:** live view verifies Blink's TLS certificate (0.6.1). The code moved to `providers/blink/`.
+The integration now holds several entries (at most one Blink account). See
+[docs/upgrade-0.7.md](docs/upgrade-0.7.md) and [docs/blink-local-feasibility.md](docs/blink-local-feasibility.md).
+
 ## 0.6.1
 
 - **Live view checks Blink's server certificate.** blinkpy opens the live-view connection with

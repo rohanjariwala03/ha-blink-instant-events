@@ -95,7 +95,8 @@
     "trigger_type": {
       "motion": "Motion detected",
       "doorbell_press": "Doorbell pressed",
-      "detection": "Smart detection finished"
+      "detection": "Smart detection finished",
+      "recording": "Recording saved"
     }
   },
   "entity": {

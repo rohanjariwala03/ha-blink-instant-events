@@ -84,8 +84,12 @@ Home Assistant does not count it as a failed login and ban the phone's IP).
       "detection": {
         "summary": "Rohan and an unknown person",
         "people": ["Rohan"],
+        "uncertain": [],
         "unknown_faces": 1,
         "labels": ["person"],
+        "identity": "unknown",
+        "matches": {"Rohan": 0.71},
+        "confidence": 0.92,
         "known_only": false,
         "image_url": "/api/blink_instant_events/detections/7bc0…f41.jpg"
       }
@@ -97,7 +101,10 @@ Home Assistant does not count it as a failed login and ban the phone's IP).
 
 `detection` is `null` until Blink Vision has read the clip (or always, without the add-on);
 `smart_detection` says whether the add-on is reachable. `GET <image_url>` (bearer) → the analyzed
-frame with boxes drawn.
+frame with boxes drawn. `people` are confirmed matches (2 frames, or 1 with similarity ≥ 0.5);
+`uncertain` names only possibly match and never count as known; `identity` is the most cautious
+reading (`unknown` > `uncertain` > `known`, or `null` without a face). The same detection fields, for
+any camera including local ones, are on `sensor.<camera>_last_detection`.
 
 Limits: `hours` 0.1–720, `pages` 1–10 (cloud pages of ~25), `limit` 1–100. Newest first.
 `local` clips need a USB drive in the Sync Module; `cloud` clips need a Blink subscription.
@@ -111,12 +118,12 @@ answer byte ranges. `cached: true` in the listing means the thumbnail is already
 | Method + path | Answer |
 | --- | --- |
 | `GET /api/blink_instant_events/people` | `{"people": [{"name": "Rohan", "photos": 3}]}` |
-| `POST /api/blink_instant_events/people/<name>` | Body: one JPEG (≤ 10 MB) showing the face. Learns the largest face: `{"name", "photos"}`; **422** `{"error"}` when there's no face or it's too small. Admins only. |
+| `POST /api/blink_instant_events/people/<name>[?force=1]` | Body: one JPEG (≤ 10 MB) showing the face. Learns the largest face: `{"name", "photos", "duplicate"}` (`duplicate: true` when the same photo was already kept). **422** `{"error"}`: no face, two faces, too small, unclear or blurry. **409**: the face already matches someone else (send again with `?force=1` if you're sure), or 20 photos already. Admins only. |
 | `DELETE /api/blink_instant_events/people/<name>` | Forgets every photo of `<name>`. Admins only. |
-| `GET /api/blink_instant_events/people/<name>.jpg` | The face from the first photo. |
+| `GET /api/blink_instant_events/people/<name>.jpg` | The face from the first photo. Admins only. |
 
 Names: letters, digits, spaces, `.`, `'`, `-`; up to 40 characters. **503** while Blink Vision is
-not running.
+not running. These work without a Blink account (also as the `enroll_face` / `delete_face` actions).
 
 ### Live view, under `/api/blink_instant_events/cameras/<slug>/`
 

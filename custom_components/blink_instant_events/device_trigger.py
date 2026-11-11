@@ -15,9 +15,9 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.trigger import TriggerActionType, TriggerInfo
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN, EVENT_DETECTION, EVENT_DOORBELL, EVENT_MOTION
+from .const import DOMAIN, EVENT_DETECTION, EVENT_DOORBELL, EVENT_MOTION, EVENT_RECORDING
 
-TRIGGER_TYPES = (EVENT_MOTION, EVENT_DOORBELL, EVENT_DETECTION)
+TRIGGER_TYPES = (EVENT_MOTION, EVENT_DOORBELL, EVENT_DETECTION, EVENT_RECORDING)
 
 TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend(
     {
@@ -28,7 +28,7 @@ TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend(
 
 
 async def async_get_triggers(hass: HomeAssistant, device_id: str) -> list[dict[str, Any]]:
-    """List triggers for the device's Blink event entity."""
+    """List triggers for the device's event entity (Blink or local camera)."""
     registry = er.async_get(hass)
     return [
         {
@@ -77,7 +77,7 @@ async def async_attach_trigger(
                     CONF_TYPE: config[CONF_TYPE],
                     "from_state": old,
                     "to_state": new,
-                    "description": f"Blink {config[CONF_TYPE]}",
+                    "description": f"Camera {config[CONF_TYPE]}",
                 }
             },
         )
