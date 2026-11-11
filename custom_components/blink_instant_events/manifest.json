@@ -13,10 +13,10 @@
     "ffmpeg",
     "http"
   ],
-  "documentation": "https://github.com/rohanjariwala03/ha-blink-instant-events",
+  "documentation": "https://github.com/rohanjariwala03/ha-local-camera-vision",
   "integration_type": "hub",
   "iot_class": "cloud_push",
-  "issue_tracker": "https://github.com/rohanjariwala03/ha-blink-instant-events/issues",
+  "issue_tracker": "https://github.com/rohanjariwala03/ha-local-camera-vision/issues",
   "loggers": [
     "blinkpy",
     "firebase_messaging"

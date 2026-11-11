@@ -69,7 +69,7 @@ Blink cameras do not offer a local RTSP or ONVIF stream; see
 1. HACS → ⋮ → **Custom repositories** → add this repository's URL, category **Integration**.
 2. Download **Local Camera Vision**, restart Home Assistant.
 3. For smart detection: Settings › Add-ons › Add-on store › ⋮ › Repositories › add
-   `https://github.com/rohanjariwala03/ha-blink-instant-events`, install **Camera Vision**, start it.
+   `https://github.com/rohanjariwala03/ha-local-camera-vision`, install **Camera Vision**, start it.
    It announces itself (with its token) and Home Assistant offers to set it up under
    **Settings → Devices & services → Discovered**.
 4. **Settings → Devices & services → Add integration → Local Camera Vision**, then pick what to add.
