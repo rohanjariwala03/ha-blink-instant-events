@@ -28,12 +28,23 @@ jobs:
 
   tests:
     runs-on: ubuntu-latest
+    # A normal run takes about 2 minutes; fail a hung one fast instead of after GitHub's 6 hours.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+          cache: pip
+          cache-dependency-path: requirements_test.txt
+      - name: Install ffmpeg
+        # apt mirrors sometimes stall with no timeout of their own: 2 minutes per try, three tries.
+        run: |
+          for try in 1 2 3; do
+            sudo timeout 120 sh -c 'apt-get update && apt-get install -y --no-install-recommends ffmpeg' && exit 0
+            echo "apt try $try failed or stalled"
+          done
+          exit 1
       - run: pip install -r requirements_test.txt ruff
       - run: ruff check custom_components blink_vision tests
       - run: ruff format --check custom_components blink_vision tests
