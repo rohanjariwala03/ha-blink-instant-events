@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.3
+
+- First tagged release: HACS shows version numbers and release notes instead of commit ids.
+- Shorter README with a **Limitations** section; entities, actions, recording, Raspberry Pi, Docker,
+  security and troubleshooting moved to [docs/reference.md](docs/reference.md).
+
 ## 0.7.2
 
 - **Fix: Blink live view (and the live look after motion) failed** with "Blink's live-view server failed
