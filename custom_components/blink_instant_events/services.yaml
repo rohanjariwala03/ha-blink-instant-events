@@ -38,6 +38,17 @@ enroll_face:
       example: /media/faces/rohan.jpg
       selector:
         text:
+    detection:
+      example: 3f9a0c2b7d1e4a5b6c7d8e9f
+      selector:
+        text:
+    face:
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 20
+          mode: box
     force:
       default: false
       selector:

@@ -47,7 +47,14 @@ from .recorder import CLEANUP_EVERY, Recorder, RecordOptions
 from .stream import RtspReader, StreamOptions, measure
 from .url import with_credentials
 
-PLATFORMS = [Platform.BINARY_SENSOR, Platform.CAMERA, Platform.EVENT, Platform.IMAGE, Platform.SENSOR]
+PLATFORMS = [
+    Platform.BINARY_SENSOR,
+    Platform.CALENDAR,
+    Platform.CAMERA,
+    Platform.EVENT,
+    Platform.IMAGE,
+    Platform.SENSOR,
+]
 HEALTH_EVERY = timedelta(seconds=15)
 
 DEFAULTS: dict[str, Any] = {

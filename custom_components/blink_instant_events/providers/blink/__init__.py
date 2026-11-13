@@ -32,6 +32,7 @@ PLATFORMS = [
     Platform.ALARM_CONTROL_PANEL,
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
+    Platform.CALENDAR,
     Platform.CAMERA,
     Platform.EVENT,
     Platform.IMAGE,

@@ -1,0 +1,54 @@
+blueprint:
+  name: Blink doorbell on the TV
+  description: >-
+    When the Blink doorbell rings, play its live view on a Cast TV for a while, only if the TV is already on.
+  domain: automation
+  source_url: https://github.com/rohanjariwala03/ha-local-camera-vision/blob/main/blueprints/automation/local_camera_vision/doorbell_on_tv.yaml
+  input:
+    doorbell:
+      name: Doorbell
+      description: The doorbell's event entity, e.g. event.front_door_blink_event.
+      selector:
+        entity:
+          filter:
+            - integration: blink_instant_events
+              domain: event
+    camera:
+      name: Doorbell camera
+      description: The doorbell's camera entity, e.g. camera.front_door.
+      selector:
+        entity:
+          filter:
+            - integration: blink_instant_events
+              domain: camera
+    tv:
+      name: TV
+      selector:
+        entity:
+          filter:
+            - domain: media_player
+    seconds:
+      name: For how long
+      default: 60
+      selector:
+        number:
+          min: 10
+          max: 300
+          unit_of_measurement: s
+
+mode: single
+
+triggers:
+  - trigger: state
+    entity_id: !input doorbell
+    not_from: unavailable
+
+conditions:
+  - "{{ trigger.to_state.attributes.event_type == 'doorbell_press' }}"
+
+actions:
+  - action: blink_instant_events.show_on_tv
+    data:
+      camera: !input camera
+      media_player: !input tv
+      duration: !input seconds

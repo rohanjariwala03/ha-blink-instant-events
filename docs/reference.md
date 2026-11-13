@@ -51,7 +51,8 @@ On every camera:
 | `binary_sensor.<camera>_uncertain_identity` | A face that only possibly matches someone; never counted as known. |
 | `binary_sensor.<camera>_vehicle`, `binary_sensor.<camera>_pet` | Cars, trucks, buses, motorcycles, bicycles; cats and dogs. |
 | `sensor.<camera>_last_detection` | "Rohan and a vehicle", with `people`, `uncertain`, `unknown_faces`, `labels`, `identity`, `matches` (similarity per name), `confidence`, `known_only`. |
-| `image.<camera>_last_detection` | The best frame of that detection, boxes drawn. |
+| `image.<camera>_last_detection` | The best frame of that detection, boxes drawn. With several faces to teach, they are numbered. |
+| `calendar.<camera>_visitors` | Who came when: every detection with a person, on Home Assistant's calendar (the last 7 days). |
 
 Local cameras also have `event.<camera>_event` (`motion`, `detection`, `recording`) and, for RTSP,
 `camera.<camera>` (live view through Home Assistant), `binary_sensor.<camera>_motion` and
@@ -74,20 +75,34 @@ Account: `sensor.blink_instant_events_last_blink_refresh` and `binary_sensor.bli
 The automation editor offers device triggers **Motion detected**, **Doorbell pressed** and **Detection**.
 
 Every `detection` event carries `summary`, `people`, `uncertain`, `unknown_faces`, `labels`, `identity`
-(`known`/`uncertain`/`unknown`/none), `matches`, `confidence`, `known_only`, `provider`, `source`
-(`local`/`cloud`), `timestamp`, and `image`: a signed link to the annotated frame, valid 24 hours, for
-notifications.
+(`known`/`uncertain`/`unknown`/none), `matches`, `confidence`, `known_only`, `faces_to_teach` (unknown or
+uncertain faces `enroll_face` can learn from it), `detection_id`, `doorbell` and `at_the_door` (below),
+`provider`, `source` (`local`/`cloud`), `timestamp`, and `image`: a signed link to the annotated frame,
+valid 24 hours, for notifications.
 
 ## Actions
 
 | Action | What it does |
 | --- | --- |
-| `blink_instant_events.enroll_face` | Admins only. Teach a face from a camera's current picture (`camera`) or a photo file (`file`, inside `allowlist_external_dirs`, e.g. `/media`). One face, close (≥ 80 px), sharp and facing the camera; a face that already matches someone else is refused unless `force: true`; the same photo twice is not stored twice. |
+| `blink_instant_events.enroll_face` | Admins only. Teach a face from a camera's current picture (`camera`), a photo file (`file`, inside `allowlist_external_dirs`, e.g. `/media`), or a past detection (`detection`: its `detection_id`; `face`: which one, by the number on its picture, 1 by default). Detections keep their faces for 7 days. One face, close (≥ 80 px), sharp and facing the camera; a face that already matches someone else is refused unless `force: true`; the same photo twice is not stored twice. |
 | `blink_instant_events.delete_face` | Admins only. Forget every photo of a person. |
 | `blink_instant_events.process_snapshot` | Analyze any camera's picture now and get the detection back (`response_variable`). |
 | `blink_instant_events.show_on_tv` | Blink: play a camera's live view on a Cast TV for `duration` seconds. |
 
 Unknown faces are never learned by themselves. Several photos from different angles and lighting help.
+
+## Blueprints
+
+Ready-made automations; import one, pick your camera and phone, save.
+
+| Blueprint | What it does | |
+| --- | --- | --- |
+| Who's at the door | After a doorbell press: "Alex is at the door" on your phone with the picture, and on speakers if you pick some. | [![Import this blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Frohanjariwala03%2Fha-local-camera-vision%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Flocal_camera_vision%2Fwho_is_at_the_door.yaml) |
+| Person alert with picture | A person on a camera, quiet when only family. A face it doesn't know gets a **This is…** button: type a name to teach it. | [![Import this blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Frohanjariwala03%2Fha-local-camera-vision%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Flocal_camera_vision%2Fperson_alert.yaml) |
+| Blink doorbell on the TV | A doorbell press plays the live view on a Cast TV that is on. | [![Import this blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Frohanjariwala03%2Fha-local-camera-vision%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Flocal_camera_vision%2Fdoorbell_on_tv.yaml) |
+
+The phone is notified through `notify.mobile_app_<phone>`, the name the Home Assistant app registered.
+Anyone who can answer the phone's notifications can teach a face this way, so pick your own phone.
 
 ## More automations
 
@@ -159,6 +174,14 @@ looking for the clip at once (Blink usually lists it 15–40 s after the motion)
 8 seconds of live view and that is read instead. It starts about 5 seconds after the motion (the camera
 has to wake and Blink has to set up the stream), so someone passing quickly can be gone; software can't
 remove that delay. Each look wakes the camera, much like recording a clip.
+
+**Doorbell presses** always look with 4 seconds of live view, with or without a subscription, and don't
+count against the daily limit: the doorbell is awake anyway, and whoever rang is standing still, close,
+facing it. If the doorbell is already on a screen (`show_on_tv`, a dashboard), that live view is read
+instead of starting another. The detection has `doorbell: true` and `at_the_door`, a sentence for a
+speaker that is never surer than the detection: "Alex is at the door", "It might be Alex at the door",
+"Someone you don't know is at the door", "Someone rang the doorbell". It arrives about 15 seconds after
+the press. With a subscription, the press's clip is analyzed again later as an ordinary detection.
 
 ## Raspberry Pi 5
 

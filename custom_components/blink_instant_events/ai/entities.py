@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
+from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.components.image import ImageEntity
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
@@ -215,3 +216,52 @@ class DetectionImage(DetectionEntity, ImageEntity):
             return None
         path = get_pipeline(self.hass).image_path(row["id"])
         return await self.hass.async_add_executor_job(lambda: path.read_bytes() if path.is_file() else None)
+
+
+VISIT = timedelta(minutes=1)  # how long a visit lasts on the calendar; a detection is one moment
+
+
+def visit(row: dict[str, Any]) -> CalendarEvent:
+    """One person detection as a calendar event: who, where, and whether they rang."""
+    start = dt_util.parse_datetime(row["created_at"]) or dt_util.utcnow()
+    return CalendarEvent(
+        start=start,
+        end=start + VISIT,
+        summary=row["summary"],
+        description=row.get("at_the_door") or None,
+        location=row.get("camera"),
+        uid=row["id"],
+    )
+
+
+class VisitorCalendar(DetectionEntity, CalendarEntity):
+    """Who came when, on Home Assistant's calendar: every detection with a person in it (the last 7 days)."""
+
+    def __init__(self, target: Target) -> None:
+        """Initialize."""
+        super().__init__(target, "visitors")
+
+    def _visits(self) -> list[dict[str, Any]]:
+        target = self._target
+        return sorted(
+            (
+                row
+                for row in get_pipeline(self.hass).rows.values()
+                if row["slug"] == target.slug
+                and row.get("entry_id", target.entry_id) == target.entry_id
+                and "person" in row["labels"]
+            ),
+            key=lambda row: row["created_at"],
+        )
+
+    @property
+    def event(self) -> CalendarEvent | None:
+        """The newest visit (the calendar is on for a minute after it)."""
+        visits = self._visits()
+        return visit(visits[-1]) if visits else None
+
+    async def async_get_events(
+        self, hass: HomeAssistant, start_date: datetime, end_date: datetime
+    ) -> list[CalendarEvent]:
+        """Visits in the range."""
+        return [event for row in self._visits() if start_date < (event := visit(row)).end and event.start < end_date]
