@@ -1,7 +1,9 @@
 """When Blink cameras get looked at: every new clip, or a few seconds of live view without a subscription.
 
 A push starts looking for the motion's clip right away; Blink usually lists it 15-40 s later. Without
-pushes, a poll that shows a new clip does the same, just later. The looking itself is ai/pipeline.py.
+pushes, a poll that shows a new clip does the same, just later. A doorbell press always looks with live view:
+the doorbell is awake anyway, and who is at the door matters now, not in 30 s. The looking itself is
+ai/pipeline.py.
 """
 
 from __future__ import annotations
@@ -19,7 +21,15 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util, slugify
 
 from ...ai.pipeline import Pipeline, async_start_pipeline, detection_key, get_pipeline
-from ...const import BLINK_ERRORS, CONF_LIVE_LOOK, CONF_LIVE_LOOK_LIMIT, DEFAULT_LIVE_LOOK_LIMIT, DOMAIN, PROVIDER_BLINK
+from ...const import (
+    BLINK_ERRORS,
+    CONF_LIVE_LOOK,
+    CONF_LIVE_LOOK_LIMIT,
+    DEFAULT_LIVE_LOOK_LIMIT,
+    DOMAIN,
+    EVENT_DOORBELL,
+    PROVIDER_BLINK,
+)
 from ..base import Source
 from .clips import Clips, clip_id
 from .coordinator import BlinkCoordinator
@@ -32,6 +42,8 @@ _LOGGER = logging.getLogger(__name__)
 
 WAIT_FOR_CLIP = (10, 10, 10, 15, 15, 20, 30, 40)  # after a push: ~2.5 min of looking, most often found by ~30 s
 LOOK_SECONDS = 8
+DOORBELL_LOOK_SECONDS = 4  # someone at the door stands still and close; they are waiting for the answer
+DOORBELL_FRAMES = 4  # read from a live view someone else is watching: its last few seconds, one a second
 GONE = "Gone before the camera looked"  # of live view after a push, when there are no clips to read
 BACKFILL = timedelta(minutes=15)  # clips older than this at startup are not analyzed
 
@@ -51,6 +63,8 @@ class Vision:
         self._watchers: dict[str, asyncio.Task[None]] = {}
         self._records: dict[str, str] = {}  # camera serial -> last_record seen, to notice new clips on a poll
         self._looks: dict[str, tuple[date, int]] = {}  # camera serial -> (day, live looks that day)
+        self._looking: set[str] = set()  # camera serials with a live look running
+        self._rang: set[str] = set()  # camera serials whose running live look is for a doorbell press
         self._started = dt_util.utcnow()
 
     @property
@@ -73,21 +87,26 @@ class Vision:
     # ------------------------------------------------------------- triggers
 
     @callback
-    def async_on_push(self, camera_id: str, _event_type: str) -> None:
-        """Motion or a doorbell press: look for its clip until it shows up."""
+    def async_on_push(self, camera_id: str, event_type: str) -> None:
+        """Motion: look for its clip until it shows up. A doorbell press: look with live view now."""
         camera = next((cam for cam in self.coordinator.blink.cameras.values() if str(cam.camera_id) == camera_id), None)
         if camera is None or not self.enabled:
             return
+        doorbell = event_type == EVENT_DOORBELL
+        if doorbell:
+            self._rang.add(camera.serial)
+        if camera.serial in self._looking:
+            return  # the look running now (after the motion just before the press) answers this push too
         if task := self._watchers.get(camera.serial):
             task.cancel()
         self._watchers[camera.serial] = self.entry.async_create_background_task(
-            self.hass, self._watch(camera), f"{DOMAIN} vision {camera.name}"
+            self.hass, self._watch(camera, doorbell), f"{DOMAIN} vision {camera.name}"
         )
 
-    async def _watch(self, camera: BlinkCamera) -> None:
+    async def _watch(self, camera: BlinkCamera, doorbell: bool = False) -> None:
         try:
-            if self.entry.options.get(CONF_LIVE_LOOK):
-                await self._look(camera)
+            if doorbell or self.entry.options.get(CONF_LIVE_LOOK):
+                await self._look(camera, doorbell)
                 return
             for delay in WAIT_FOR_CLIP:
                 await asyncio.sleep(delay)
@@ -148,31 +167,56 @@ class Vision:
             return False
         return True
 
-    async def _look(self, camera: BlinkCamera) -> None:
-        """No clips without a Blink subscription: watch a few seconds of live view and read that instead."""
+    async def _look(self, camera: BlinkCamera, doorbell: bool = False) -> None:
+        """Watch a few seconds of live view and read that: without a Blink subscription, or after a doorbell press.
+
+        A press is looked at even when someone is already watching (the doorbell on the TV, say): their live view
+        is read, never ended. Presses don't count against the daily limit; the doorbell is awake anyway.
+        """
         slug = camera_slug(camera)
-        if self.live is None or slug in self.live.sessions:
+        if self.live is None or (slug in self.live.sessions and not doorbell):
+            self._rang.discard(camera.serial)
             return  # someone is already watching it
-        if not self._within_budget(camera):
+        if not doorbell and not self._within_budget(camera):
             return
         created = dt_util.utcnow()
+        key = detection_key("live", slug, created.isoformat())
+        self._looking.add(camera.serial)
         try:
+            if slug in self.live.sessions:
+                await self._read_running(key, camera, created)
+                return
             session = await self.live.get_or_start(slug, "")
             try:
                 await session.wait_ready()
-                await asyncio.sleep(LOOK_SECONDS)
+                await asyncio.sleep(DOORBELL_LOOK_SECONDS if doorbell else LOOK_SECONDS)
             finally:
-                # A viewer who joined meanwhile keeps the session; their live view isn't ours to end or read.
+                # A viewer who joined meanwhile keeps the session; their live view isn't ours to end.
                 mine = self.live.sessions.get(slug) is session and not any(
                     viewer.startswith(f"{slug}:") for viewer in self.live.viewers
                 )
                 if mine:
                     await self.live.async_stop(slug)
-            if not mine or (path := await self.live.last_liveview_mp4(slug)) is None:
-                return
-            await self._analyze_file(detection_key("live", slug, created.isoformat()), path, camera, created, GONE)
+            if not mine:
+                await self._read_running(key, camera, created)
+            elif (path := await self.live.last_liveview_mp4(slug)) is not None:
+                await self._analyze_file(key, path, camera, created, GONE)
         except (*BLINK_ERRORS, LookupError) as err:
             _LOGGER.warning("Could not look at %s with live view: %s", camera.name, err)
+        finally:
+            self._looking.discard(camera.serial)
+            self._rang.discard(camera.serial)
+
+    async def _read_running(self, key: str, camera: BlinkCamera, created: datetime) -> None:
+        """Read a few seconds of a live view someone else is watching, from its HLS playlist; only after a press."""
+        if camera.serial not in self._rang or self.live is None:
+            return
+        session = self.live.sessions.get(camera_slug(camera))
+        if session is None:
+            return
+        await session.wait_ready()
+        jpegs = await self.pipeline.async_frames(session.playlist, DOORBELL_FRAMES)
+        await self.pipeline.async_analyze(self.source(camera), key, jpegs, created, empty=GONE, doorbell=True)
 
     async def _analyze(self, clip: dict[str, Any]) -> None:
         key = clip_id(clip)
@@ -185,4 +229,6 @@ class Vision:
         self, key: str, path: Path, camera: BlinkCamera, created: datetime, empty: str | None = None
     ) -> None:
         jpegs = await self.pipeline.async_frames(path)
-        await self.pipeline.async_analyze(self.source(camera), key, jpegs, created, empty=empty)
+        await self.pipeline.async_analyze(
+            self.source(camera), key, jpegs, created, empty=empty, doorbell=camera.serial in self._rang
+        )

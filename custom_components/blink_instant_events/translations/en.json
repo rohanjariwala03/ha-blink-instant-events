@@ -222,6 +222,11 @@
       "last_detection": {
         "name": "Last detection"
       }
+    },
+    "calendar": {
+      "visitors": {
+        "name": "Visitors"
+      }
     }
   },
   "options": {
@@ -334,7 +339,7 @@
     },
     "enroll_face": {
       "name": "Teach a face",
-      "description": "Admins only. Teaches Camera Vision this person's face from a camera's current picture or a photo file (one face, close, sharp, facing the camera). Unknown faces are never learned by themselves.",
+      "description": "Admins only. Teaches Camera Vision this person's face from a camera's current picture, a photo file, or a face in a past detection (one face, close, sharp, facing the camera). Unknown faces are never learned by themselves.",
       "fields": {
         "name": {
           "name": "Name",
@@ -347,6 +352,14 @@
         "file": {
           "name": "Photo file",
           "description": "A JPEG or PNG in a folder Home Assistant allows, e.g. /media."
+        },
+        "detection": {
+          "name": "From a detection",
+          "description": "A detection_id from an alert or the Last detection sensor: learns the unknown face it saw."
+        },
+        "face": {
+          "name": "Which face",
+          "description": "With several faces to teach in one detection, the number on its picture (1 is the biggest)."
         },
         "force": {
           "name": "Even if it looks like someone else",

@@ -1,0 +1,95 @@
+blueprint:
+  name: Person alert with picture (teach faces from the alert)
+  description: >-
+    A phone notification with the picture when a camera sees a person, staying quiet when everyone it
+    saw is someone you taught it. When there's a face it doesn't know, the notification has a "This is…"
+    button: type a name and it learns that face (the biggest one in the picture). It never learns a face
+    unless you answer.
+  domain: automation
+  source_url: https://github.com/rohanjariwala03/ha-local-camera-vision/blob/main/blueprints/automation/local_camera_vision/person_alert.yaml
+  input:
+    camera:
+      name: Camera
+      description: The camera's event entity, e.g. event.front_door_blink_event or event.porch_event.
+      selector:
+        entity:
+          filter:
+            - integration: blink_instant_events
+              domain: event
+    phone:
+      name: Phone
+      description: The phone (Home Assistant app) to notify.
+      selector:
+        device:
+          filter:
+            - integration: mobile_app
+    quiet_for_family:
+      name: Quiet when only family
+      description: No notification when everyone seen was recognized.
+      default: true
+      selector:
+        boolean:
+    teach_hours:
+      name: Answer within
+      description: How long the "This is…" button keeps working, in hours.
+      default: 12
+      selector:
+        number:
+          min: 1
+          max: 72
+          unit_of_measurement: h
+
+mode: parallel
+max: 10
+
+triggers:
+  - trigger: state
+    entity_id: !input camera
+    not_from: unavailable
+
+variables:
+  phone: !input phone
+  notify: "notify.mobile_app_{{ device_attr(phone, 'name') | slugify }}"
+  quiet_for_family: !input quiet_for_family
+  teach_hours: !input teach_hours
+  seen: "{{ trigger.to_state.attributes }}"
+  answer: "LCV_TEACH_{{ seen.detection_id }}"
+
+conditions:
+  - "{{ seen.event_type == 'detection' and 'person' in seen.labels }}"
+  - "{{ not (quiet_for_family and seen.known_only) }}"
+
+actions:
+  - action: "{{ notify }}"
+    data:
+      title: "{{ seen.camera }}"
+      message: "{{ seen.summary }}"
+      data:
+        image: "{{ seen.image }}"
+        actions: >-
+          {{ [{'action': answer, 'title': 'This is…', 'behavior': 'textInput',
+               'textInputButtonTitle': 'Teach', 'textInputPlaceholder': 'Name'}]
+             if (seen.faces_to_teach or 0) > 0 else [] }}
+  - condition: "{{ (seen.faces_to_teach or 0) > 0 }}"
+  - wait_for_trigger:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "{{ answer }}"
+    timeout:
+      hours: "{{ teach_hours }}"
+    continue_on_timeout: false
+  - variables:
+      name: "{{ (wait.trigger.event.data.reply_text or '') | trim }}"
+  - condition: "{{ name != '' }}"
+  - action: blink_instant_events.enroll_face
+    continue_on_error: true
+    response_variable: learned
+    data:
+      name: "{{ name }}"
+      detection: "{{ seen.detection_id }}"
+  - action: "{{ notify }}"
+    data:
+      message: >-
+        {{ ('Got it: that was ' ~ name ~ '.') if learned is defined
+           else ('Could not learn ' ~ name ~ ' from that picture; the face may look like someone else. See the logs.') }}

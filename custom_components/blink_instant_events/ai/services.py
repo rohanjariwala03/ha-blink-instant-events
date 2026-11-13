@@ -1,7 +1,8 @@
 """Actions for smart detection, for any camera: teach or forget a face, analyze a camera's picture now.
 
 Teaching and forgetting are admin-only (they decide whose visits stay quiet). A photo comes from a camera
-entity or from a file in a folder Home Assistant allows (allowlist_external_dirs, e.g. /media).
+entity, a file in a folder Home Assistant allows (allowlist_external_dirs, e.g. /media), or a face in a past
+detection (its `detection_id`; `face` picks one by the number on the picture when there are several).
 """
 
 from __future__ import annotations
@@ -31,6 +32,9 @@ PHOTO = vol.Schema(
         vol.Required("name"): vol.All(cv.string, vol.Length(min=1, max=40)),
         vol.Exclusive("camera", "photo"): cv.entity_domain("camera"),
         vol.Exclusive("file", "photo"): cv.string,
+        # Detection ids are 24 hex characters; nothing else may reach a file path.
+        vol.Exclusive("detection", "photo"): vol.Match(r"^[0-9a-f]{24}$"),
+        vol.Optional("face", default=1): vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
         vol.Optional("force", default=False): cv.boolean,
     }
 )
@@ -44,8 +48,16 @@ async def _picture(hass: HomeAssistant, data: dict[str, Any]) -> bytes:
             return (await async_get_image(hass, camera, timeout=10)).content
         except HomeAssistantError as err:
             raise HomeAssistantError(f"{camera} gave no picture: {err}") from err
+    if detection := data.get("detection"):
+        path = get_pipeline(hass).face_path(detection, data.get("face", 1))
+        face = await hass.async_add_executor_job(lambda: path.read_bytes() if path.is_file() else None)
+        if face is None:
+            raise ServiceValidationError(
+                f"Detection {detection} has no face {data.get('face', 1)} to learn (or is older than 7 days)"
+            )
+        return face
     if not (file := data.get("file")):
-        raise ServiceValidationError("Give a camera or a file")
+        raise ServiceValidationError("Give a camera, a file or a detection")
 
     def read() -> bytes:
         path = Path(file)

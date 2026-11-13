@@ -171,12 +171,54 @@ def best_frame(frames: list[dict[str, Any]]) -> int:
     return max(range(len(frames)), key=lambda i: rank(frames[i])) if frames else 0
 
 
+def teachable(frame: dict[str, Any]) -> list[dict[str, Any]]:
+    """The faces in a frame someone could put a name to (unknown or uncertain, not blurred), biggest first."""
+    faces = [face for face in frame["faces"] if _match(face) in ("unknown", "uncertain")]
+    return sorted(faces, key=lambda face: face["box"][2] * face["box"][3], reverse=True)
+
+
+def crop_face(jpeg: bytes, box: list[int]) -> bytes:
+    """A face with a face's width of margin around it: enough for the add-on to find and align it again."""
+    image = Image.open(io.BytesIO(jpeg)).convert("RGB")
+    x, y, w, h = box
+    pad = max(w, h)
+    image = image.crop(
+        (max(0, x - pad), max(0, y - pad), min(image.width, x + w + pad), min(image.height, y + h + pad))
+    )
+    out = io.BytesIO()
+    image.save(out, "JPEG", quality=95)
+    return out.getvalue()
+
+
+def _names(names: list[str]) -> str:
+    return f"{', '.join(names[:-1])} and {names[-1]}" if len(names) > 1 else names[0]
+
+
+def at_the_door(row: dict[str, Any]) -> str:
+    """What a speaker can say after a doorbell press, from the most cautious reading of who it is."""
+    people, maybe, unknown = row["people"], row["uncertain"], row["unknown_faces"]
+    if unknown:
+        stranger = "someone you don't know" if unknown == 1 else f"{unknown} people you don't know"
+        who = _names([*people, stranger])
+        return f"{who[0].upper()}{who[1:]} {'are' if people or unknown > 1 else 'is'} at the door"
+    if maybe:
+        return f"It might be {_names(maybe)} at the door"
+    if people:
+        return f"{_names(people)} {'are' if len(people) > 1 else 'is'} at the door"
+    return "Someone is at the door" if "person" in row["labels"] else "Someone rang the doorbell"
+
+
 def annotate(jpeg: bytes, frame: dict[str, Any]) -> bytes:
-    """The frame with a box around each face (named if known) and each person, vehicle and animal."""
+    """The frame with a box around each face (named if known) and each person, vehicle and animal.
+
+    With more than one face to teach, those are numbered: enroll_face's `face` picks one by its number.
+    """
     image = Image.open(io.BytesIO(jpeg)).convert("RGB")
     draw = ImageDraw.Draw(image)
     width = max(2, image.width // 320)
     font_size = max(14, image.height // 30)
+    to_teach = teachable(frame)
+    numbers = {id(face): n for n, face in enumerate(to_teach, 1)} if len(to_teach) > 1 else {}
     for obj in frame["objects"]:
         x, y, w, h = obj["box"]
         draw.rectangle((x, y, x + w, y + h), outline=COLORS.get(obj["group"], COLORS["person"]), width=width)
@@ -194,6 +236,8 @@ def annotate(jpeg: bytes, frame: dict[str, Any]) -> bytes:
             if match == "unclear"
             else "Unknown"
         )
+        if number := numbers.get(id(face)):
+            label = f"{number}. {label}"
         left, top, right, bottom = draw.textbbox((x, y), label, font_size=font_size)
         draw.rectangle((left - 4, top - (bottom - top) - 8, right + 4, top - 2), fill=color)
         draw.text((x, top - (bottom - top) - 6), label, fill=(0, 0, 0), font_size=font_size)
@@ -334,10 +378,12 @@ class Pipeline:
         *,
         empty: str | None = None,
         drop_parked_vehicles: bool = True,
+        doorbell: bool = False,
     ) -> dict[str, Any]:
         """Analyze one event's frames, store and announce the detection. `empty` replaces "Nothing found".
 
         Asked for by hand (process_snapshot), parked vehicles are reported too; they are remembered either way.
+        After a doorbell press the detection also says who is at the door, in a sentence a speaker can read.
         """
         jpegs = list(dict.fromkeys(jpegs))  # a still camera sends the same picture more than once
         if not jpegs or self.url is None:
@@ -362,6 +408,10 @@ class Pipeline:
             best = best_frame(frames)
             image = await self.hass.async_add_executor_job(annotate, jpegs[best], frames[best])
             await self.hass.async_add_executor_job(self._save_image, key, image)
+            faces = teachable(frames[best])
+            for number, face in enumerate(faces, 1):
+                crop = await self.hass.async_add_executor_job(crop_face, jpegs[best], face["box"])
+                await self.hass.async_add_executor_job(self._save, self.face_path(key, number), crop)
         row = {
             "id": key,
             "entry_id": source.entry_id,
@@ -373,9 +423,12 @@ class Pipeline:
             "created_at": created.isoformat(),
             "analyzed_at": dt_util.utcnow().isoformat(),
             **summarize(frames),
+            "faces_to_teach": len(faces),
+            "doorbell": doorbell,
         }
         if empty and not row["labels"]:
             row["summary"] = empty
+        row["at_the_door"] = at_the_door(row) if doorbell else None
         self.rows[key] = row
         self._prune()
         self._store.async_delay_save(lambda: list(self.rows.values()), 5)
@@ -386,9 +439,16 @@ class Pipeline:
         """Where a detection's annotated best frame is kept."""
         return self.root / f"{key}.jpg"
 
+    def face_path(self, key: str, number: int) -> Path:
+        """Where the detection's `number`th face to teach (1 = the biggest) is kept, cut out of the best frame."""
+        return self.root / f"{key}.face{number}.jpg"
+
     def _save_image(self, key: str, data: bytes) -> None:
+        self._save(self.image_path(key), data)
+
+    def _save(self, path: Path, data: bytes) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
-        self.image_path(key).write_bytes(data)
+        path.write_bytes(data)
 
     def _prune(self) -> None:
         cutoff = (dt_util.utcnow() - KEEP).isoformat()
@@ -402,6 +462,8 @@ class Pipeline:
     def _unlink(self, keys: list[str]) -> None:
         for key in keys:
             self.image_path(key).unlink(missing_ok=True)
+            for face in self.root.glob(f"{key}.face*.jpg"):
+                face.unlink(missing_ok=True)
 
     @callback
     def _announce(self, row: dict[str, Any], source: Source) -> None:
@@ -460,6 +522,9 @@ PUBLIC = (
     "matches",
     "confidence",
     "known_only",
+    "faces_to_teach",
+    "doorbell",
+    "at_the_door",
 )
 
 
