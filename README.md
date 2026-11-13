@@ -121,6 +121,8 @@ with what changed, and HACS shows the same notes when there's an update. Older h
 ## More
 
 - [Reference](docs/reference.md): entities, actions, recording, Raspberry Pi tips, Docker, security, troubleshooting
+- [Smart Home](https://github.com/rohanjariwala03/smart-home): an example iPhone app (Expo / React Native) built on this
+  integration's [HTTP API](docs/app-api.md), with live view, push-to-talk, clips, snapshots and arming
 - [Upgrading to 0.7](docs/upgrade-0.7.md) · [HTTP API for apps](docs/app-api.md) · [Moving from Blink Live View Proxy](docs/migration.md) · [Protocol notes](docs/protocol.md)
 
 MIT licensed. See [NOTICE](NOTICE).
