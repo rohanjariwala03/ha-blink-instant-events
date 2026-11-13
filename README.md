@@ -15,6 +15,8 @@ It works with two kinds of cameras:
 
 This used to be *Blink Instant Events*. If you had that installed, just update; your setup carries over.
 
+If it's useful to you, you can [buy me a coffee](https://buymeacoffee.com/rohanjariwala03) ☕
+
 > Unofficial. Not affiliated with Blink, Amazon, Google or Home Assistant.
 
 ## Install
