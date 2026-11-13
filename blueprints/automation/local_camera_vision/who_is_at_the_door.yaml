@@ -1,0 +1,76 @@
+blueprint:
+  name: Who's at the door
+  description: >-
+    When the doorbell rings, Local Camera Vision looks at whoever pressed it and says who it is: "Alex is at
+    the door", "Someone you don't know is at the door". Sends it to your phone with the picture and,
+    if you pick speakers, reads it out loud. Recognition is a good guess, not proof.
+  domain: automation
+  source_url: https://github.com/rohanjariwala03/ha-local-camera-vision/blob/main/blueprints/automation/local_camera_vision/who_is_at_the_door.yaml
+  input:
+    doorbell:
+      name: Doorbell
+      description: The doorbell's event entity, e.g. event.front_door_blink_event.
+      selector:
+        entity:
+          filter:
+            - integration: blink_instant_events
+              domain: event
+    phone:
+      name: Phone
+      description: The phone (Home Assistant app) to notify.
+      selector:
+        device:
+          filter:
+            - integration: mobile_app
+    speakers:
+      name: Speakers
+      description: Optional. Say it on these speakers too.
+      default: []
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: media_player
+    voice:
+      name: Text-to-speech
+      description: Needed only with speakers, e.g. tts.home_assistant_cloud or tts.piper.
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: tts
+
+mode: queued
+max: 5
+
+triggers:
+  - trigger: state
+    entity_id: !input doorbell
+    not_from: unavailable
+
+variables:
+  phone: !input phone
+  notify: "notify.mobile_app_{{ device_attr(phone, 'name') | slugify }}"
+  speakers: !input speakers
+  voice: !input voice
+  seen: "{{ trigger.to_state.attributes }}"
+
+conditions:
+  - "{{ seen.event_type == 'detection' and seen.doorbell }}"
+
+actions:
+  - action: "{{ notify }}"
+    data:
+      title: "{{ seen.camera }}"
+      message: "{{ seen.at_the_door }}"
+      data:
+        image: "{{ seen.image }}"
+        tag: "doorbell-{{ seen.camera | slugify }}"
+  - if: "{{ speakers | count > 0 and voice != '' }}"
+    then:
+      - action: tts.speak
+        target:
+          entity_id: "{{ voice }}"
+        data:
+          media_player_entity_id: "{{ speakers }}"
+          message: "{{ seen.at_the_door }}"

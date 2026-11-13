@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.0
+
+- **Who's at the door.** A Blink doorbell press now always looks with a few seconds of live view, with or
+  without a subscription, and the detection says who it is in a sentence a speaker can read
+  (`at_the_door`: "Alex is at the door", "Someone you don't know is at the door"). Presses don't count
+  against the daily live-look limit, and a doorbell already showing on a TV is read, not restarted.
+- **Teach a face from an alert.** `enroll_face` takes a past detection (`detection`, plus `face` when
+  there were several); the *Person alert* blueprint puts a **This is…** reply on a stranger's
+  notification, so you type a name instead of standing in front of the camera. Faces are still never
+  learned unless you ask.
+- **Blueprints.** Who's at the door, Person alert with picture, and Blink doorbell on the TV, with
+  import buttons in the README.
+- **Visitors calendar.** `calendar.<camera>_visitors` lists every detection with a person in it, so Home
+  Assistant's calendar shows who came when.
+- Live view no longer triggers Home Assistant's "Detected blocking call to load_verify_locations" warning:
+  the pinned certificate is loaded off the event loop.
+
 ## 0.7.7
 
 - **Blink live view is a real camera stream.** `camera.<camera>_live_view` now has a stream source, so

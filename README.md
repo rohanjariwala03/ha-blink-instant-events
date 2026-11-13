@@ -56,7 +56,9 @@ data:
   camera: camera.front_door
 ```
 
-A few photos from different angles and light help. It never learns a face on its own; strangers stay strangers.
+Or answer an alert: with the *Person alert* blueprint below, a stranger's notification has a **This is…**
+button; type a name and it learns that face. A few photos from different angles and light help. It never
+learns a face on its own; strangers stay strangers.
 
 ## Get a notification
 
@@ -74,7 +76,13 @@ actions:
         image: "{{ state_attr('image.front_door_last_detection', 'entity_picture') }}"
 ```
 
-Each camera also gets `person`, `known_person`, `uncertain_identity`, `vehicle` and `pet` sensors. Home
+Or import a ready-made one:
+
+- **Who's at the door**: after a doorbell press, "Alex is at the door" on your phone and speakers. [![Import this blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Frohanjariwala03%2Fha-local-camera-vision%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Flocal_camera_vision%2Fwho_is_at_the_door.yaml)
+- **Person alert with picture**: quiet when only family, and teach a stranger's face from the alert. [![Import this blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Frohanjariwala03%2Fha-local-camera-vision%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Flocal_camera_vision%2Fperson_alert.yaml)
+- **Blink doorbell on the TV**. [![Import this blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Frohanjariwala03%2Fha-local-camera-vision%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Flocal_camera_vision%2Fdoorbell_on_tv.yaml)
+
+Each camera also gets a **Visitors** calendar (who came when) and `person`, `known_person`, `uncertain_identity`, `vehicle` and `pet` sensors. Home
 Assistant may add the area to the name (`camera.cameras_outdoor`), so check your entity ids first. The
 [reference](docs/reference.md) lists every entity, action and option.
 

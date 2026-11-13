@@ -17,6 +17,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry, async_
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.blink_instant_events.ai.pipeline import (
+    at_the_door,
     best_frame,
     drop_parked,
     split_jpegs,
@@ -355,3 +356,138 @@ def test_parked_vehicle_is_not_news() -> None:
     drop_parked(now, last)
     assert [obj["box"] for obj in now[0]["objects"]] == [[900, 300, 200, 100], [210, 200, 50, 150]]
     assert summarize(now)["labels"] == ["person", "vehicle"]
+
+
+@pytest.mark.parametrize(
+    ("frames", "sentence"),
+    [
+        ([frame(["Rohan"], ["person"])], "Rohan is at the door"),
+        ([frame(["Rohan", "Priya"])], "Priya and Rohan are at the door"),
+        ([frame([None], ["person"])], "Someone you don't know is at the door"),
+        ([frame(["Rohan", None])], "Rohan and someone you don't know are at the door"),
+        ([frame([None, None])], "2 people you don't know are at the door"),
+        ([{"faces": [face(None, 0.31, "uncertain", "Priya")], "objects": []}], "It might be Priya at the door"),
+        ([frame(objects=["person"])], "Someone is at the door"),
+        ([frame()], "Someone rang the doorbell"),
+    ],
+)
+def test_at_the_door(frames: list[dict], sentence: str) -> None:
+    """What a speaker says after a press: never more sure than the detection."""
+    assert at_the_door(summarize(frames)) == sentence
+
+
+STRANGER = {
+    "faces": [{"name": None, "match": "unknown", "similarity": 0.1, "box": [300, 100, 60, 60]}],
+    "objects": [{"label": "person", "group": "person", "box": [250, 50, 200, 300]}],
+}
+
+
+async def test_doorbell_look(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_fcm: MagicMock,
+    mock_account: MagicMock,
+    mock_blink: MagicMock,
+    aioclient_mock: AiohttpClientMocker,
+    clip_file: Path,
+) -> None:
+    """A press looks with live view even with clips (and past the daily limit), and reads a viewer's session."""
+    aioclient_mock.get(f"{VISION}/health", json={"ok": True})
+    aioclient_mock.post(f"{VISION}/analyze", json=STRANGER)
+    config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(config_entry, options={CONF_VISION_URL: VISION, "live_look_limit": 1})
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    vision = config_entry.runtime_data.vision
+    vision.pipeline.ffmpeg = FFMPEG
+    vision._looks["DOOR"] = (dt_util.now().date(), 5)  # well past today's limit
+    live = vision.live = MagicMock(sessions={}, viewers={})
+    session = MagicMock(wait_ready=AsyncMock(), playlist=clip_file)
+
+    async def start(slug: str, viewer: str) -> MagicMock:
+        live.sessions[slug] = session
+        return session
+
+    live.get_or_start = AsyncMock(side_effect=start)
+    live.async_stop = AsyncMock(side_effect=lambda slug: live.sessions.pop(slug))
+    live.last_liveview_mp4 = AsyncMock(return_value=clip_file)
+    press = {"created_at": dt_util.utcnow().isoformat(), "event_type": "button_press", "camera_id": 100002}
+    with patch("custom_components.blink_instant_events.providers.blink.vision.DOORBELL_LOOK_SECONDS", 0):
+        config_entry.runtime_data.listener._on_push({"data": json.dumps(press)}, "p1")
+        await hass.async_block_till_done(wait_background_tasks=True)
+        live.async_stop.assert_awaited_once_with("front_door")
+        seen = hass.states.get("event.front_door_blink_event").attributes
+        assert seen["event_type"] == "detection"
+        assert (seen["doorbell"], seen["at_the_door"]) == (True, "Someone you don't know is at the door")
+        assert seen["faces_to_teach"] == 1
+        assert vision.pipeline.face_path(seen["detection_id"], 1).is_file()
+
+        # The doorbell is already on the TV: that live view is read, not ended or restarted.
+        live.sessions["front_door"] = session
+        live.get_or_start.reset_mock()
+        live.async_stop.reset_mock()
+        config_entry.runtime_data.listener._on_push({"data": json.dumps(press | {"unique_id": "x2"})}, "p2")
+        await hass.async_block_till_done(wait_background_tasks=True)
+        live.get_or_start.assert_not_awaited()
+        live.async_stop.assert_not_awaited()
+        assert len([row for row in vision.pipeline.rows.values() if row["doorbell"]]) == 2
+        assert not vision._looking and not vision._rang
+
+
+async def test_teach_from_detection(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_fcm: MagicMock,
+    mock_account: MagicMock,
+    mock_blink: MagicMock,
+    aioclient_mock: AiohttpClientMocker,
+) -> None:
+    """enroll_face with a detection sends the stranger's face, cut out; a bad id never reaches a path."""
+    aioclient_mock.get(f"{VISION}/health", json={"ok": True})
+    aioclient_mock.post(f"{VISION}/analyze", json=STRANGER)
+    aioclient_mock.post(f"{VISION}/people/Alex", json={"name": "Alex", "photos": 1}, headers=JSON)
+    config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(config_entry, options={CONF_VISION_URL: VISION})
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    picture = io.BytesIO()
+    Image.new("RGB", (640, 360), "gray").save(picture, "JPEG")
+    pipeline = config_entry.runtime_data.vision.pipeline
+    source = config_entry.runtime_data.vision.source(mock_blink.cameras["Backyard"])
+    row = await pipeline.async_analyze(source, "a" * 24, [picture.getvalue()], dt_util.utcnow())
+    assert row["faces_to_teach"] == 1
+    answer = await hass.services.async_call(
+        "blink_instant_events",
+        "enroll_face",
+        {"name": "Alex", "detection": "a" * 24},
+        blocking=True,
+        return_response=True,
+    )
+    assert answer == {"name": "Alex", "photos": 1}
+    sent = Image.open(io.BytesIO(aioclient_mock.mock_calls[-1][2]))
+    assert sent.size == (180, 180)  # the 60 px face with 60 px around it
+
+    with pytest.raises(Exception, match="no face 2"):
+        await hass.services.async_call(
+            "blink_instant_events", "enroll_face", {"name": "Alex", "detection": "a" * 24, "face": 2}, blocking=True
+        )
+    with pytest.raises(Exception, match="detection"):
+        await hass.services.async_call(
+            "blink_instant_events", "enroll_face", {"name": "Alex", "detection": "../../secrets"}, blocking=True
+        )
+
+    # The visitors calendar shows it.
+    calendar = hass.states.get("calendar.backyard_visitors")
+    assert calendar.attributes["message"] == "An unknown person"
+    events = await hass.services.async_call(
+        "calendar",
+        "get_events",
+        {
+            "entity_id": "calendar.backyard_visitors",
+            "start_date_time": dt_util.now() - timedelta(minutes=5),
+            "duration": {"hours": 1},
+        },
+        blocking=True,
+        return_response=True,
+    )
+    assert [event["summary"] for event in events["calendar.backyard_visitors"]["events"]] == ["An unknown person"]

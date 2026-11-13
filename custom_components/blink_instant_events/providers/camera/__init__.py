@@ -23,7 +23,7 @@ from ..local.watcher import DEFAULT_COOLDOWN, Watcher
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.BINARY_SENSOR, Platform.EVENT, Platform.IMAGE, Platform.SENSOR]
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.CALENDAR, Platform.EVENT, Platform.IMAGE, Platform.SENSOR]
 IMAGE_TIMEOUT = 10
 
 
