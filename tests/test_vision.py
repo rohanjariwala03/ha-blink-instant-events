@@ -20,6 +20,8 @@ from custom_components.blink_instant_events.ai.pipeline import (
     at_the_door,
     best_frame,
     drop_parked,
+    inside,
+    keep_in_zone,
     split_jpegs,
     summarize,
     vehicle_boxes,
@@ -491,3 +493,91 @@ async def test_teach_from_detection(
         return_response=True,
     )
     assert [event["summary"] for event in events["calendar.backyard_visitors"]["events"]] == ["An unknown person"]
+
+
+def test_zone() -> None:
+    """People count by where they stand, faces by their middle; anything outside the polygon is dropped."""
+    lower = [(0.0, 0.4), (1.0, 0.4), (1.0, 1.0), (0.0, 1.0)]
+    assert inside(0.5, 0.7, lower) and not inside(0.5, 0.2, lower)
+    triangle = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]
+    assert inside(0.2, 0.2, triangle) and not inside(0.8, 0.8, triangle)
+    frames = [
+        {
+            "width": 1000,
+            "height": 1000,
+            "faces": [{"box": [100, 100, 50, 50]}, {"box": [500, 700, 50, 50]}],
+            "objects": [
+                {"label": "person", "group": "person", "box": [100, 100, 100, 400]},  # feet at y=0.5: in
+                {"label": "car", "group": "vehicle", "box": [600, 0, 300, 200]},  # the street: out
+            ],
+        },
+        {"faces": [{"box": [1, 1, 5, 5]}], "objects": []},  # no frame size (old add-on): left alone
+    ]
+    keep_in_zone(frames, lower)
+    assert [face["box"] for face in frames[0]["faces"]] == [[500, 700, 50, 50]]
+    assert [obj["label"] for obj in frames[0]["objects"]] == ["person"]
+    assert len(frames[1]["faces"]) == 1
+
+
+async def test_zone_and_wrong_person(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_fcm: MagicMock,
+    mock_account: MagicMock,
+    mock_blink: MagicMock,
+    aioclient_mock: AiohttpClientMocker,
+) -> None:
+    """set_zone keeps the street out of a camera's detections; not_this_person sends the face it matched."""
+    aioclient_mock.get(f"{VISION}/health", json={"ok": True})
+    aioclient_mock.post(
+        f"{VISION}/analyze",
+        json={
+            "width": 640,
+            "height": 360,
+            "faces": [{"name": "Rohan", "match": "known", "similarity": 0.7, "box": [300, 200, 60, 60]}],
+            "objects": [
+                {"label": "person", "group": "person", "box": [280, 150, 100, 200]},
+                {"label": "car", "group": "vehicle", "box": [0, 0, 200, 80]},
+            ],
+        },
+    )
+    aioclient_mock.post(f"{VISION}/people/Rohan/not", json={"name": "Rohan", "not_them": 1}, headers=JSON)
+    config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(config_entry, options={CONF_VISION_URL: VISION})
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    vision = config_entry.runtime_data.vision
+    picture = io.BytesIO()
+    Image.new("RGB", (640, 360), "gray").save(picture, "JPEG")
+    source = vision.source(mock_blink.cameras["Backyard"])
+
+    lower = [[0, 40], [100, 40], [100, 100], [0, 100]]
+    await hass.services.async_call(
+        "blink_instant_events", "set_zone", {"camera": "binary_sensor.backyard_person", "zone": lower}, blocking=True
+    )
+    assert vision.pipeline.zones == {f"{config_entry.entry_id}/backyard": [(0, 0.4), (1, 0.4), (1, 1), (0, 1)]}
+    row = await vision.pipeline.async_analyze(source, "b" * 24, [picture.getvalue()], dt_util.utcnow())
+    assert row["summary"] == "Rohan"  # the car in the street is gone
+
+    answer = await hass.services.async_call(
+        "blink_instant_events",
+        "not_this_person",
+        {"detection": "b" * 24, "name": "Rohan"},
+        blocking=True,
+        return_response=True,
+    )
+    assert answer == {"name": "Rohan", "not_them": 1}
+    assert Image.open(io.BytesIO(aioclient_mock.mock_calls[-1][2])).size == (180, 180)
+    with pytest.raises(Exception, match="matched nobody called Priya"):
+        await hass.services.async_call(
+            "blink_instant_events", "not_this_person", {"detection": "b" * 24, "name": "Priya"}, blocking=True
+        )
+
+    with pytest.raises(Exception, match="at least 3 points"):
+        await hass.services.async_call(
+            "blink_instant_events", "set_zone", {"camera": "camera.backyard", "zone": [[0, 0], [1, 1]]}, blocking=True
+        )
+    with pytest.raises(Exception, match="not a camera"):
+        await hass.services.async_call("blink_instant_events", "set_zone", {"camera": "sensor.nothing"}, blocking=True)
+    await hass.services.async_call("blink_instant_events", "set_zone", {"camera": "camera.backyard"}, blocking=True)
+    assert vision.pipeline.zones == {}

@@ -38,6 +38,18 @@ async def automation(hass: HomeAssistant, name: str, inputs: dict) -> None:
     assert hass.states.get(automation_id).state == "on", f"{name} did not load"
 
 
+async def answered(hass: HomeAssistant, notify: list) -> None:
+    """Until the notification is sent and the run waits for the answer.
+
+    Not async_block_till_done: the run waits (for hours) for an answer that may never come.
+    """
+    for _ in range(100):
+        if notify:
+            break
+        await asyncio.sleep(0.01)
+    await asyncio.sleep(0.05)
+
+
 def fire(hass: HomeAssistant, entity_id: str, **attributes: object) -> None:
     hass.states.async_set(entity_id, f"2026-11-11T12:00:0{len(attributes) % 10}", attributes)
 
@@ -56,12 +68,31 @@ async def test_who_is_at_the_door(hass: HomeAssistant, phone: str) -> None:
     fire(hass, "event.door", **seen, doorbell=False, at_the_door=None)
     await hass.async_block_till_done()
     assert not notify
-    fire(hass, "event.door", **seen, doorbell=True, at_the_door="Rohan is at the door", x=1)
-    await hass.async_block_till_done()
+    not_them = async_mock_service(hass, "blink_instant_events", "not_this_person", response={"not_them": 1})
+    detection = "c" * 24
+    fire(
+        hass,
+        "event.door",
+        **seen,
+        doorbell=True,
+        at_the_door="Rohan is at the door",
+        people=["Rohan"],
+        detection_id=detection,
+        x=1,
+    )
+    await answered(hass, notify)
     assert notify[0].data["message"] == "Rohan is at the door"
     assert notify[0].data["data"]["image"] == "/api/x.jpg"
     assert speak[0].data["message"] == "Rohan is at the door"
     assert speak[0].data["media_player_entity_id"] == ["media_player.kitchen"]
+
+    # It wasn't Rohan.
+    [button] = notify[0].data["data"]["actions"]
+    assert button == {"action": f"LCV_NOT_{detection}", "title": "Not Rohan"}
+    hass.bus.async_fire("mobile_app_notification_action", {"action": button["action"]})
+    await hass.async_block_till_done()
+    assert [call.data for call in not_them] == [{"name": "Rohan", "detection": detection}]
+    assert notify[1].data["message"] == "Noted: that face is not Rohan."
 
 
 async def test_person_alert_teaches_on_reply(hass: HomeAssistant, phone: str) -> None:
@@ -86,12 +117,7 @@ async def test_person_alert_teaches_on_reply(hass: HomeAssistant, phone: str) ->
         detection_id=detection,
         x=1,
     )
-    # Not async_block_till_done: the run now waits (for hours) for the answer.
-    for _ in range(100):
-        if notify:
-            break
-        await asyncio.sleep(0.01)
-    await asyncio.sleep(0.05)  # and its wait_for_trigger is listening
+    await answered(hass, notify)
     assert notify[0].data["message"] == "An unknown person"
     [button] = notify[0].data["data"]["actions"]
     assert (button["action"], button["behavior"]) == (f"LCV_TEACH_{detection}", "textInput")

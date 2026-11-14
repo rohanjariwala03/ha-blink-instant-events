@@ -48,6 +48,7 @@ def store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(server, "PEOPLE", tmp_path / "people")
     monkeypatch.setattr(server, "SETTINGS", dict(server.SETTINGS))
     server.known.clear()
+    server.not_them.clear()
     return tmp_path
 
 
@@ -156,3 +157,23 @@ def test_http_api(api: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     assert api("POST", "/people/..%2Fescape", jpeg)[0] == 404
     assert api("DELETE", "/people/Rohan%20J") == (200, {"deleted": "Rohan J"})
     assert api("GET", "/people") == (200, {"people": []})
+
+
+def test_not_this_person(api: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A look-alike marked as not Rohan stops matching him; Rohan himself still does, and his photos stay."""
+    jpeg = cv2.imencode(".jpg", photo())[1].tobytes()
+    use_faces(monkeypatch, (row(), ROHAN))
+    assert api("POST", "/people/Rohan", jpeg)[0] == 200
+    assert server.identify(CLOSE_TO_ROHAN)["match"] == "known"
+
+    use_faces(monkeypatch, (row(), CLOSE_TO_ROHAN))
+    assert api("POST", "/people/Rohan/not", jpeg) == (200, {"name": "Rohan", "not_them": 1, "duplicate": False})
+    assert api("POST", "/people/Rohan/not", jpeg)[1]["duplicate"] is True
+    assert server.identify(CLOSE_TO_ROHAN)["match"] == "unknown"
+    assert server.identify(ROHAN)["name"] == "Rohan"
+    assert api("GET", "/people") == (200, {"people": [{"name": "Rohan", "photos": 1}]})
+
+    assert api("POST", "/people/Nobody/not", jpeg)[0] == 404
+    assert api("DELETE", "/people/Rohan/not")[0] == 404  # never deletes Rohan
+    server.load_people()  # kept on disk
+    assert server.identify(CLOSE_TO_ROHAN)["match"] == "unknown"

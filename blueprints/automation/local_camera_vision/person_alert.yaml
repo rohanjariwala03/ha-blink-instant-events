@@ -3,8 +3,8 @@ blueprint:
   description: >-
     A phone notification with the picture when a camera sees a person, staying quiet when everyone it
     saw is someone you taught it. When there's a face it doesn't know, the notification has a "This is…"
-    button: type a name and it learns that face (the biggest one in the picture). It never learns a face
-    unless you answer.
+    button: type a name and it learns that face (the biggest one in the picture). When it names someone,
+    a "Not …" button tells it that face wasn't them. It never learns or unlearns a face unless you answer.
   domain: automation
   source_url: https://github.com/rohanjariwala03/ha-local-camera-vision/blob/main/blueprints/automation/local_camera_vision/person_alert.yaml
   input:
@@ -29,9 +29,9 @@ blueprint:
       default: true
       selector:
         boolean:
-    teach_hours:
+    answer_hours:
       name: Answer within
-      description: How long the "This is…" button keeps working, in hours.
+      description: How long the "This is…" and "Not …" buttons keep working, in hours.
       default: 12
       selector:
         number:
@@ -51,9 +51,13 @@ variables:
   phone: !input phone
   notify: "notify.mobile_app_{{ device_attr(phone, 'name') | slugify }}"
   quiet_for_family: !input quiet_for_family
-  teach_hours: !input teach_hours
+  answer_hours: !input answer_hours
   seen: "{{ trigger.to_state.attributes }}"
-  answer: "LCV_TEACH_{{ seen.detection_id }}"
+  wrong_name: "{{ ((seen.people or []) + (seen.uncertain or [])) | first | default('') }}"
+  buttons: >-
+    {{ ([{'action': 'LCV_TEACH_' ~ seen.detection_id, 'title': 'This is…', 'behavior': 'textInput',
+          'textInputButtonTitle': 'Teach', 'textInputPlaceholder': 'Name'}] if (seen.faces_to_teach or 0) > 0 else [])
+       + ([{'action': 'LCV_NOT_' ~ seen.detection_id, 'title': 'Not ' ~ wrong_name}] if wrong_name else []) }}
 
 conditions:
   - "{{ seen.event_type == 'detection' and 'person' in seen.labels }}"
@@ -66,30 +70,48 @@ actions:
       message: "{{ seen.summary }}"
       data:
         image: "{{ seen.image }}"
-        actions: >-
-          {{ [{'action': answer, 'title': 'This is…', 'behavior': 'textInput',
-               'textInputButtonTitle': 'Teach', 'textInputPlaceholder': 'Name'}]
-             if (seen.faces_to_teach or 0) > 0 else [] }}
-  - condition: "{{ (seen.faces_to_teach or 0) > 0 }}"
+        actions: "{{ buttons }}"
+  # The answer, if it comes: teach the stranger's face, or tell it who that wasn't.
+  - condition: "{{ buttons | count > 0 }}"
   - wait_for_trigger:
       - trigger: event
+        id: teach
         event_type: mobile_app_notification_action
         event_data:
-          action: "{{ answer }}"
+          action: "LCV_TEACH_{{ seen.detection_id }}"
+      - trigger: event
+        id: not
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "LCV_NOT_{{ seen.detection_id }}"
     timeout:
-      hours: "{{ teach_hours }}"
+      hours: "{{ answer_hours }}"
     continue_on_timeout: false
-  - variables:
-      name: "{{ (wait.trigger.event.data.reply_text or '') | trim }}"
-  - condition: "{{ name != '' }}"
-  - action: blink_instant_events.enroll_face
-    continue_on_error: true
-    response_variable: learned
-    data:
-      name: "{{ name }}"
-      detection: "{{ seen.detection_id }}"
-  - action: "{{ notify }}"
-    data:
-      message: >-
-        {{ ('Got it: that was ' ~ name ~ '.') if learned is defined
-           else ('Could not learn ' ~ name ~ ' from that picture; the face may look like someone else. See the logs.') }}
+  - if: "{{ wait.trigger.id == 'not' }}"
+    then:
+      - action: blink_instant_events.not_this_person
+        continue_on_error: true
+        response_variable: corrected
+        data:
+          name: "{{ wrong_name }}"
+          detection: "{{ seen.detection_id }}"
+      - action: "{{ notify }}"
+        data:
+          message: >-
+            {{ ('Noted: that face is not ' ~ wrong_name ~ '.') if corrected is defined
+               else ('Could not note that; see the logs.') }}
+    else:
+      - variables:
+          name: "{{ (wait.trigger.event.data.reply_text or '') | trim }}"
+      - condition: "{{ name != '' }}"
+      - action: blink_instant_events.enroll_face
+        continue_on_error: true
+        response_variable: learned
+        data:
+          name: "{{ name }}"
+          detection: "{{ seen.detection_id }}"
+      - action: "{{ notify }}"
+        data:
+          message: >-
+            {{ ('Got it: that was ' ~ name ~ '.') if learned is defined
+               else ('Could not learn ' ~ name ~ ' from that picture; the face may look like someone else. See the logs.') }}

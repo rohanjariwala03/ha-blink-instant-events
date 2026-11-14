@@ -68,3 +68,28 @@ process_snapshot:
       selector:
         entity:
           domain: camera
+
+not_this_person:
+  fields:
+    detection:
+      required: true
+      example: 3f9a0c2b7d1e4a5b6c7d8e9f
+      selector:
+        text:
+    name:
+      required: true
+      example: Alex
+      selector:
+        text:
+
+set_zone:
+  fields:
+    camera:
+      required: true
+      selector:
+        entity:
+          integration: blink_instant_events
+    zone:
+      example: "[[0, 40], [100, 40], [100, 100], [0, 100]]"
+      selector:
+        object:

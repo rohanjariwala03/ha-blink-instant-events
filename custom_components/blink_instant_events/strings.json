@@ -386,6 +386,34 @@
           "description": "Any camera in Home Assistant."
         }
       }
+    },
+    "not_this_person": {
+      "name": "That wasn't them",
+      "description": "Admins only. Tells Camera Vision the face a detection matched to this name was someone else, so that face stops matching them. Their own photos are kept.",
+      "fields": {
+        "detection": {
+          "name": "Detection",
+          "description": "The detection_id from the alert or the Last detection sensor."
+        },
+        "name": {
+          "name": "Name it gave",
+          "description": "Who it said it was, but wasn't."
+        }
+      }
+    },
+    "set_zone": {
+      "name": "Set detection zone",
+      "description": "Admins only. Only people, vehicles and animals inside this area of the picture count; the rest (the street, a neighbour's drive) is ignored. Leave the zone empty for the whole picture.",
+      "fields": {
+        "camera": {
+          "name": "Camera",
+          "description": "The camera, or any entity of its device (for a camera from another integration, the camera entity it reads)."
+        },
+        "zone": {
+          "name": "Zone",
+          "description": "At least 3 corners as [x, y] in percent of the picture, from its top left: [[0, 40], [100, 40], [100, 100], [0, 100]] is the lower 60 %."
+        }
+      }
     }
   },
   "issues": {

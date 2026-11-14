@@ -30,7 +30,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
-from homeassistant.util import dt as dt_util
+from homeassistant.util import dt as dt_util, slugify
 
 from ..const import CONF_VISION_TOKEN, CONF_VISION_URL, DOMAIN, EVENT_DETECTION, SIGNAL_DETECTION, SIGNAL_EVENT
 from ..providers.base import CameraEvent, Source
@@ -50,6 +50,7 @@ CONFIRM_FRAMES = 2  # frames a name must match in before it counts as known
 STRONG_MATCH = 0.5  # SFace cosine similarity at which one frame is enough (the add-on's threshold is 0.363)
 PETS = {"cat", "dog"}
 PARKED_IOU = 0.6  # a vehicle box overlapping one from the camera's previous detection this much is parked
+ZONE_COLOR = (0, 255, 255)
 COLORS = {
     "known": (46, 204, 113),
     "uncertain": (255, 59, 48),
@@ -158,6 +159,32 @@ def drop_parked(frames: list[dict[str, Any]], parked: list[tuple[float, float, f
         ]
 
 
+type Zone = list[tuple[float, float]]  # a polygon, as fractions of the frame from its top left
+
+
+def inside(x: float, y: float, zone: Zone) -> bool:
+    """Whether the point is in the polygon (even-odd rule)."""
+    hit = False
+    for (x1, y1), (x2, y2) in zip(zone, zone[1:] + zone[:1], strict=True):
+        if (y1 > y) != (y2 > y) and x < x1 + (y - y1) * (x2 - x1) / (y2 - y1):
+            hit = not hit
+    return hit
+
+
+def _in_zone(box: list[int], frame: dict[str, Any], zone: Zone, bottom: bool) -> bool:
+    x, y, w, h = box
+    return inside((x + w / 2) / frame["width"], (y + (h if bottom else h / 2)) / frame["height"], zone)
+
+
+def keep_in_zone(frames: list[dict[str, Any]], zone: Zone) -> None:
+    """Drop what is outside the camera's zone: objects by where they stand (bottom middle), faces by their middle."""
+    for frame in frames:
+        if not (frame.get("width") and frame.get("height")):
+            continue  # Camera Vision before 0.2 sends no frame size; nothing to measure against
+        frame["objects"] = [obj for obj in frame["objects"] if _in_zone(obj["box"], frame, zone, bottom=True)]
+        frame["faces"] = [face for face in frame["faces"] if _in_zone(face["box"], frame, zone, bottom=False)]
+
+
 def best_frame(frames: list[dict[str, Any]]) -> int:
     """The frame that shows the most: the most faces, then the biggest ones, then people, then anything."""
 
@@ -190,6 +217,18 @@ def crop_face(jpeg: bytes, box: list[int]) -> bytes:
     return out.getvalue()
 
 
+def matched_faces(frames: list[dict[str, Any]]) -> dict[str, tuple[int, list[int]]]:
+    """Per name a face was matched (or possibly matched) to: (frame index, box) of its closest match."""
+    best: dict[str, tuple[float, int, list[int]]] = {}
+    for index, frame in enumerate(frames):
+        for face in frame["faces"]:
+            name = face.get("name") if _match(face) == "known" else face.get("candidate")
+            similarity = float(face.get("similarity", 1.0))
+            if name and similarity > best.get(name, (-1.0, 0, []))[0]:
+                best[name] = (similarity, index, face["box"])
+    return {name: (index, box) for name, (_s, index, box) in best.items()}
+
+
 def _names(names: list[str]) -> str:
     return f"{', '.join(names[:-1])} and {names[-1]}" if len(names) > 1 else names[0]
 
@@ -208,14 +247,17 @@ def at_the_door(row: dict[str, Any]) -> str:
     return "Someone is at the door" if "person" in row["labels"] else "Someone rang the doorbell"
 
 
-def annotate(jpeg: bytes, frame: dict[str, Any]) -> bytes:
+def annotate(jpeg: bytes, frame: dict[str, Any], zone: Zone | None = None) -> bytes:
     """The frame with a box around each face (named if known) and each person, vehicle and animal.
 
-    With more than one face to teach, those are numbered: enroll_face's `face` picks one by its number.
+    With more than one face to teach, those are numbered: enroll_face's `face` picks one by its number. The
+    camera's zone, if it has one, is outlined.
     """
     image = Image.open(io.BytesIO(jpeg)).convert("RGB")
     draw = ImageDraw.Draw(image)
     width = max(2, image.width // 320)
+    if zone:
+        draw.polygon([(x * image.width, y * image.height) for x, y in zone], outline=ZONE_COLOR, width=width)
     font_size = max(14, image.height // 30)
     to_teach = teachable(frame)
     numbers = {id(face): n for n, face in enumerate(to_teach, 1)} if len(to_teach) > 1 else {}
@@ -281,6 +323,8 @@ class Pipeline:
         self.parked: dict[str, list[tuple[float, float, float, float]]] = {}  # camera -> its last vehicles
         self.root = Path(hass.config.cache_path(DOMAIN, "detections"))
         self._store: Store[list[dict[str, Any]]] = Store(hass, 1, f"{DOMAIN}.detections")
+        self.zones: dict[str, Zone] = {}  # camera ("<entry id>/<slug>") -> where detections count
+        self._zones: Store[dict[str, list[list[float]]]] = Store(hass, 1, f"{DOMAIN}.zones")
         # ponytail: one analysis at a time across all cameras; the add-on runs one model at a time anyway.
         self._lock = asyncio.Lock()
         self._loaded = False
@@ -300,6 +344,16 @@ class Pipeline:
         if not self._loaded:
             self._loaded = True
             self.rows = {row["id"]: row for row in await self._store.async_load() or []}
+            zones = await self._zones.async_load() or {}
+            self.zones = {camera: [(x, y) for x, y in points] for camera, points in zones.items()}
+
+    def set_zone(self, camera: str, zone: Zone | None) -> None:
+        """Where detections count on this camera ("<entry id>/<slug>"); None for the whole picture."""
+        if zone:
+            self.zones[camera] = zone
+        else:
+            self.zones.pop(camera, None)
+        self._zones.async_delay_save(lambda: {k: [list(p) for p in v] for k, v in self.zones.items()}, 1)
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.token}"} if self.token else {}
@@ -401,17 +455,24 @@ class Pipeline:
                     resp.raise_for_status()
                     frames.append(await resp.json())
             camera = f"{source.entry_id}/{source.slug}"
+            zone = self.zones.get(camera)
+            if zone:
+                keep_in_zone(frames, zone)
             seen = vehicle_boxes(frames)
             if drop_parked_vehicles:
                 drop_parked(frames, self.parked.get(camera, []))
             self.parked[camera] = seen
             best = best_frame(frames)
-            image = await self.hass.async_add_executor_job(annotate, jpegs[best], frames[best])
+            image = await self.hass.async_add_executor_job(annotate, jpegs[best], frames[best], zone)
             await self.hass.async_add_executor_job(self._save_image, key, image)
             faces = teachable(frames[best])
             for number, face in enumerate(faces, 1):
                 crop = await self.hass.async_add_executor_job(crop_face, jpegs[best], face["box"])
                 await self.hass.async_add_executor_job(self._save, self.face_path(key, number), crop)
+            # The face each name came from, so "that wasn't Alex" can tell Camera Vision which face it wasn't.
+            for name, (index, box) in matched_faces(frames).items():
+                crop = await self.hass.async_add_executor_job(crop_face, jpegs[index], box)
+                await self.hass.async_add_executor_job(self._save, self.named_face_path(key, name), crop)
         row = {
             "id": key,
             "entry_id": source.entry_id,
@@ -439,6 +500,10 @@ class Pipeline:
         """Where a detection's annotated best frame is kept."""
         return self.root / f"{key}.jpg"
 
+    def named_face_path(self, key: str, name: str) -> Path:
+        """Where the face the detection matched to `name` is kept."""
+        return self.root / f"{key}.as-{slugify(name)}.jpg"
+
     def face_path(self, key: str, number: int) -> Path:
         """Where the detection's `number`th face to teach (1 = the biggest) is kept, cut out of the best frame."""
         return self.root / f"{key}.face{number}.jpg"
@@ -462,7 +527,7 @@ class Pipeline:
     def _unlink(self, keys: list[str]) -> None:
         for key in keys:
             self.image_path(key).unlink(missing_ok=True)
-            for face in self.root.glob(f"{key}.face*.jpg"):
+            for face in (*self.root.glob(f"{key}.face*.jpg"), *self.root.glob(f"{key}.as-*.jpg")):
                 face.unlink(missing_ok=True)
 
     @callback
