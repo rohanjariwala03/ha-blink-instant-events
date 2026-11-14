@@ -58,8 +58,8 @@ data:
   camera: camera.front_door
 ```
 
-Or answer an alert: with the *Person alert* blueprint below, a stranger's notification has a **This is…**
-button; type a name and it learns that face. A few photos from different angles and light help. It never
+Or answer an alert: with the blueprints below, a stranger's notification has a **This is…** button; type a
+name and it learns that face. Got someone wrong? **Not Alex** on the alert tells it that face wasn't Alex. A few photos from different angles and light help. It never
 learns a face on its own; strangers stay strangers.
 
 ## Get a notification
@@ -84,7 +84,8 @@ Or import a ready-made one:
 - **Person alert with picture**: quiet when only family, and teach a stranger's face from the alert. [![Import this blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Frohanjariwala03%2Fha-local-camera-vision%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Flocal_camera_vision%2Fperson_alert.yaml)
 - **Blink doorbell on the TV**. [![Import this blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Frohanjariwala03%2Fha-local-camera-vision%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Flocal_camera_vision%2Fdoorbell_on_tv.yaml)
 
-Each camera also gets a **Visitors** calendar (who came when) and `person`, `known_person`, `uncertain_identity`, `vehicle` and `pet` sensors. Home
+Street traffic setting it off? Give the camera a [detection zone](docs/reference.md#detection-zones). Each
+camera also gets a **Visitors** calendar (who came when) and `person`, `known_person`, `uncertain_identity`, `vehicle` and `pet` sensors. Home
 Assistant may add the area to the name (`camera.cameras_outdoor`), so check your entity ids first. The
 [reference](docs/reference.md) lists every entity, action and option.
 

@@ -3,7 +3,8 @@ blueprint:
   description: >-
     When the doorbell rings, Local Camera Vision looks at whoever pressed it and says who it is: "Alex is at
     the door", "Someone you don't know is at the door". Sends it to your phone with the picture and,
-    if you pick speakers, reads it out loud. Recognition is a good guess, not proof.
+    if you pick speakers, reads it out loud. Answer the notification to teach a stranger's face
+    ("This is…") or to say it got someone wrong ("Not …"). Recognition is a good guess, not proof.
   domain: automation
   source_url: https://github.com/rohanjariwala03/ha-local-camera-vision/blob/main/blueprints/automation/local_camera_vision/who_is_at_the_door.yaml
   input:
@@ -39,9 +40,18 @@ blueprint:
         entity:
           filter:
             - domain: tts
+    answer_hours:
+      name: Answer within
+      description: How long the "This is…" and "Not …" buttons keep working, in hours.
+      default: 12
+      selector:
+        number:
+          min: 1
+          max: 72
+          unit_of_measurement: h
 
-mode: queued
-max: 5
+mode: parallel
+max: 10
 
 triggers:
   - trigger: state
@@ -53,7 +63,13 @@ variables:
   notify: "notify.mobile_app_{{ device_attr(phone, 'name') | slugify }}"
   speakers: !input speakers
   voice: !input voice
+  answer_hours: !input answer_hours
   seen: "{{ trigger.to_state.attributes }}"
+  wrong_name: "{{ ((seen.people or []) + (seen.uncertain or [])) | first | default('') }}"
+  buttons: >-
+    {{ ([{'action': 'LCV_TEACH_' ~ seen.detection_id, 'title': 'This is…', 'behavior': 'textInput',
+          'textInputButtonTitle': 'Teach', 'textInputPlaceholder': 'Name'}] if (seen.faces_to_teach or 0) > 0 else [])
+       + ([{'action': 'LCV_NOT_' ~ seen.detection_id, 'title': 'Not ' ~ wrong_name}] if wrong_name else []) }}
 
 conditions:
   - "{{ seen.event_type == 'detection' and seen.doorbell }}"
@@ -66,6 +82,7 @@ actions:
       data:
         image: "{{ seen.image }}"
         tag: "doorbell-{{ seen.camera | slugify }}"
+        actions: "{{ buttons }}"
   - if: "{{ speakers | count > 0 and voice != '' }}"
     then:
       - action: tts.speak
@@ -74,3 +91,47 @@ actions:
         data:
           media_player_entity_id: "{{ speakers }}"
           message: "{{ seen.at_the_door }}"
+  # The answer, if it comes: teach the stranger's face, or tell it who that wasn't.
+  - condition: "{{ buttons | count > 0 }}"
+  - wait_for_trigger:
+      - trigger: event
+        id: teach
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "LCV_TEACH_{{ seen.detection_id }}"
+      - trigger: event
+        id: not
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "LCV_NOT_{{ seen.detection_id }}"
+    timeout:
+      hours: "{{ answer_hours }}"
+    continue_on_timeout: false
+  - if: "{{ wait.trigger.id == 'not' }}"
+    then:
+      - action: blink_instant_events.not_this_person
+        continue_on_error: true
+        response_variable: corrected
+        data:
+          name: "{{ wrong_name }}"
+          detection: "{{ seen.detection_id }}"
+      - action: "{{ notify }}"
+        data:
+          message: >-
+            {{ ('Noted: that face is not ' ~ wrong_name ~ '.') if corrected is defined
+               else ('Could not note that; see the logs.') }}
+    else:
+      - variables:
+          name: "{{ (wait.trigger.event.data.reply_text or '') | trim }}"
+      - condition: "{{ name != '' }}"
+      - action: blink_instant_events.enroll_face
+        continue_on_error: true
+        response_variable: learned
+        data:
+          name: "{{ name }}"
+          detection: "{{ seen.detection_id }}"
+      - action: "{{ notify }}"
+        data:
+          message: >-
+            {{ ('Got it: that was ' ~ name ~ '.') if learned is defined
+               else ('Could not learn ' ~ name ~ ' from that picture; the face may look like someone else. See the logs.') }}

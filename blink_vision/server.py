@@ -3,6 +3,7 @@
 POST /analyze           JPEG body -> {"objects": [...], "faces": [...]}
 GET  /people            -> {"people": [{"name", "photos"}]}
 POST /people/<name>     JPEG body: learn this face (the largest one in the photo); ?force=1 past a look-alike
+POST /people/<name>/not JPEG body: this face is not <name>; it stops matching them (their photos are kept)
 DELETE /people/<name>   forget everyone's photos of <name>
 GET  /people/<name>.jpg the face from the first photo
 GET  /health            -> {"ok": true} (the only call without the token)
@@ -14,7 +15,8 @@ Models from the OpenCV Model Zoo: YuNet finds faces, SFace tells them apart, YOL
 vehicles and animals. As an add-on it is only reachable on Home Assistant's internal network.
 
 Recognition is a likelihood: a face at least `same_person` similar to someone's photos is that person,
-one between `uncertain_from` and `same_person` is only possibly them, anything less is unknown.
+one between `uncertain_from` and `same_person` is only possibly them, anything less is unknown. A face at least
+as similar to one of a person's "not them" faces as to their photos is not them.
 """
 
 from __future__ import annotations
@@ -88,6 +90,7 @@ GRID = STRIDE = np.zeros((0, 2))
 TOKEN = ""
 
 known: dict[str, np.ndarray] = {}  # name -> (n, 128) unit vectors
+not_them: dict[str, np.ndarray] = {}  # name -> faces someone said were not them
 
 
 class Refused(ValueError):
@@ -160,13 +163,17 @@ def load_models() -> None:
 
 def load_people() -> None:
     """Read every stored face into memory."""
-    found = {}
+    found, wrong = {}, {}
     for folder in sorted(PEOPLE.glob("*")):
         feats = [np.load(f) for f in sorted(folder.glob("*.npy"))]
         if feats:
             found[folder.name] = np.vstack(feats)
+        if negatives := [np.load(f) for f in sorted(folder.glob("not/*.npy"))]:
+            wrong[folder.name] = np.vstack(negatives)
     known.clear()
     known.update(found)
+    not_them.clear()
+    not_them.update(wrong)
 
 
 def decode(body: bytes) -> np.ndarray:
@@ -227,6 +234,8 @@ def best_match(feature: np.ndarray, skip: str | None = None) -> tuple[str | None
         if person == skip:
             continue
         score = float((feats @ feature).max())
+        if person in not_them and float((not_them[person] @ feature).max()) >= score:
+            continue  # closer to a face someone said wasn't them
         if score > similarity:
             name, similarity = person, score
     return name, similarity
@@ -299,6 +308,27 @@ def enrol(name: str, image: np.ndarray, force: bool = False) -> dict[str, Any]:
     return {"name": name, "photos": len(known[name]), "duplicate": False}
 
 
+def not_this_person(name: str, image: np.ndarray) -> dict[str, Any]:
+    """Remember this face (the largest in the picture) as not `name`, so it stops matching them."""
+    if name not in known:
+        raise Refused(404, f"No such person: {name}")
+    with lock:
+        found = faces(image)
+    if not found:
+        raise Refused(422, "No face found in this picture")
+    feature = found[0][1]
+    stored = not_them.get(name)
+    if stored is not None and float((stored @ feature).max()) >= SAME_PHOTO:
+        return {"name": name, "not_them": len(stored), "duplicate": True}
+    if stored is not None and len(stored) >= MAX_PHOTOS:
+        raise Refused(409, f"{name} has {MAX_PHOTOS} faces marked as not them; forget them and start again")
+    folder = PEOPLE / name / "not"
+    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+    np.save(folder / f"{time.time_ns()}.npy", feature)
+    load_people()
+    return {"name": name, "not_them": len(not_them[name]), "duplicate": False}
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, status: int, body: dict | bytes, kind: str = "application/json") -> None:
         data = body if isinstance(body, bytes) else json.dumps(body).encode()
@@ -329,9 +359,14 @@ class Handler(BaseHTTPRequestHandler):
     def _path(self) -> str:
         return urlsplit(self.path).path
 
-    def _name(self) -> str | None:
-        """The <name> in /people/<name>[.jpg], if it's a safe folder name."""
-        raw = unquote(self._path().removeprefix("/people/")).removesuffix(".jpg").strip()
+    def _name(self, suffix: str = "") -> str | None:
+        """The <name> in /people/<name><suffix>[.jpg], if it's a safe folder name."""
+        path = self._path().removeprefix("/people/")
+        if suffix:
+            if not path.endswith(suffix):
+                return None
+            path = path.removesuffix(suffix)
+        raw = unquote(path).removesuffix(".jpg").strip()
         return raw if NAME.fullmatch(raw) else None
 
     def do_GET(self) -> None:
@@ -359,6 +394,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/analyze":
                 self._send(200, analyze(decode(self._body())))
+            elif path.startswith("/people/") and (name := self._name("/not")):
+                self._send(200, not_this_person(name, decode(self._body())))
             elif path.startswith("/people/") and (name := self._name()):
                 force = parse_qs(urlsplit(self.path).query).get("force") == ["1"]
                 self._send(200, enrol(name, decode(self._body()), force))

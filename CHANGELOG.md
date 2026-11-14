@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.0
+
+- **Detection zones.** `set_zone` gives a camera a polygon where detections count; people, cars and
+  animals outside it (the street, a neighbour's drive) are ignored. The zone is drawn on every detection
+  picture so you can check it.
+- **"That wasn't Alex."** `not_this_person` tells Camera Vision the face a detection matched to a name
+  was someone else; that face stops matching them and their own photos are kept. Both blueprints now put
+  a **Not Alex** button on an alert that names someone (Who's at the door also gets **This is…**).
+- **Camera Vision 0.3.0** (add-on): `POST /people/<name>/not`. A face at least as close to one of those
+  as to the person's photos is not them. Update the add-on for `not_this_person`.
+
 ## 0.8.0
 
 - **Who's at the door.** A Blink doorbell press now always looks with a few seconds of live view, with or

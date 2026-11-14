@@ -85,6 +85,8 @@ valid 24 hours, for notifications.
 | Action | What it does |
 | --- | --- |
 | `blink_instant_events.enroll_face` | Admins only. Teach a face from a camera's current picture (`camera`), a photo file (`file`, inside `allowlist_external_dirs`, e.g. `/media`), or a past detection (`detection`: its `detection_id`; `face`: which one, by the number on its picture, 1 by default). Detections keep their faces for 7 days. One face, close (≥ 80 px), sharp and facing the camera; a face that already matches someone else is refused unless `force: true`; the same photo twice is not stored twice. |
+| `blink_instant_events.not_this_person` | Admins only. "That wasn't Alex": the face a detection (`detection`) matched to `name` was someone else. Camera Vision keeps that face as *not Alex*, so it and faces like it stop matching Alex; Alex's own photos are kept. Needs Camera Vision 0.3.0. |
+| `blink_instant_events.set_zone` | Admins only. Where detections count on a camera (see [Detection zones](#detection-zones)). |
 | `blink_instant_events.delete_face` | Admins only. Forget every photo of a person. |
 | `blink_instant_events.process_snapshot` | Analyze any camera's picture now and get the detection back (`response_variable`). |
 | `blink_instant_events.show_on_tv` | Blink: play a camera's live view on a Cast TV for `duration` seconds. |
@@ -97,8 +99,8 @@ Ready-made automations; import one, pick your camera and phone, save.
 
 | Blueprint | What it does | |
 | --- | --- | --- |
-| Who's at the door | After a doorbell press: "Alex is at the door" on your phone with the picture, and on speakers if you pick some. | [![Import this blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Frohanjariwala03%2Fha-local-camera-vision%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Flocal_camera_vision%2Fwho_is_at_the_door.yaml) |
-| Person alert with picture | A person on a camera, quiet when only family. A face it doesn't know gets a **This is…** button: type a name to teach it. | [![Import this blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Frohanjariwala03%2Fha-local-camera-vision%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Flocal_camera_vision%2Fperson_alert.yaml) |
+| Who's at the door | After a doorbell press: "Alex is at the door" on your phone with the picture, and on speakers if you pick some. **This is…** and **Not Alex** buttons, as below. | [![Import this blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Frohanjariwala03%2Fha-local-camera-vision%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Flocal_camera_vision%2Fwho_is_at_the_door.yaml) |
+| Person alert with picture | A person on a camera, quiet when only family. A face it doesn't know gets a **This is…** button: type a name to teach it. When it names someone, **Not Alex** tells it that face wasn't Alex. | [![Import this blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Frohanjariwala03%2Fha-local-camera-vision%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Flocal_camera_vision%2Fperson_alert.yaml) |
 | Blink doorbell on the TV | A doorbell press plays the live view on a Cast TV that is on. | [![Import this blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Frohanjariwala03%2Fha-local-camera-vision%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Flocal_camera_vision%2Fdoorbell_on_tv.yaml) |
 
 The phone is notified through `notify.mobile_app_<phone>`, the name the Home Assistant app registered.
@@ -165,6 +167,24 @@ folder (Media › My media › `blink_instant_events/blink/<camera>/<date>/`, na
 drive work without a Blink subscription. It checks once an hour and copies one clip at a time; while a live
 view is open it waits for the next hour, because the Sync Module has to upload each USB clip first and a
 busy module makes the Blink app say "system busy". Under 2 GB free it stops copying until there is room.
+
+## Detection zones
+
+By default the whole picture counts. To ignore the street or a neighbour's drive, give a camera a zone: a
+polygon with at least 3 corners, each `[x, y]` in percent of the picture from its top left. People,
+vehicles and animals count where they stand (the bottom middle of their box), faces by their middle.
+
+```yaml
+action: blink_instant_events.set_zone
+data:
+  camera: camera.front_door   # or any entity of the camera's device
+  zone: [[0, 40], [100, 40], [100, 100], [0, 100]]   # the lower 60 % of the picture
+```
+
+The zone is outlined in cyan on every detection picture after that, so check `image.<camera>_last_detection`
+and adjust. Run it without `zone` to go back to the whole picture. Zones don't change when Blink records or
+alerts; they only change what the detection reports. Asking for a picture by hand (`process_snapshot`)
+ignores them.
 
 ## Smart detection on Blink cameras
 
